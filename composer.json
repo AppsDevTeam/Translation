@@ -1,5 +1,5 @@
 {
-	"name": "kdyby/translation",
+	"name": "adt/translation",
 	"type": "library",
 	"description": "Integration of Symfony/Translation into Nette Framework",
 	"keywords": ["nette", "kdyby", "translation"],
