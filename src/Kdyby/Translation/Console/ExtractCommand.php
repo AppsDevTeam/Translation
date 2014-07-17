@@ -37,6 +37,11 @@ class ExtractCommand extends Command
 	private $translator;
 
 	/**
+	 * @var \Kdyby\Translation\TranslationLoader
+	 */
+	private $loader;
+
+	/**
 	 * @var \Symfony\Component\Translation\Writer\TranslationWriter
 	 */
 	private $writer;
@@ -84,6 +89,7 @@ class ExtractCommand extends Command
 	protected function initialize(InputInterface $input, OutputInterface $output)
 	{
 		$this->translator = $this->getHelper('container')->getByType('Kdyby\Translation\Translator');
+		$this->loader = $this->getHelper('container')->getByType('Kdyby\Translation\TranslationLoader');
 		$this->writer = $this->getHelper('container')->getByType('Symfony\Component\Translation\Writer\TranslationWriter');
 		$this->extractor = $this->getHelper('container')->getByType('Symfony\Component\Translation\Extractor\ChainExtractor');
 		$this->serviceLocator = $this->getHelper('container')->getContainer();
@@ -131,6 +137,10 @@ class ExtractCommand extends Command
 			$output->writeln(sprintf('<info>Extracting %s</info>', $dir));
 			$this->extractor->extract($dir, $catalogue);
 		}
+		
+		$existingCatalogue = new MessageCatalogue($input->getOption('catalogue-language'));
+		$this->loader->loadMessages($this->outputDir, $existingCatalogue);
+		$catalogue->addCatalogue($existingCatalogue);
 
 		$this->writer->writeTranslations($catalogue, $this->outputFormat, array(
 			'path' => $this->outputDir,
