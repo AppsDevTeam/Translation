@@ -55,12 +55,97 @@ class PhpExtractor extends Nette\Object implements ExtractorInterface
 	 */
 	public function extractFile($file, MessageCatalogue $catalogue)
 	{
-		preg_match_all('/["\']([a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-])*)["\']/', file_get_contents($file), $matches);
+		$fileContent = file_get_contents($file);
 		
-		//file_put_contents('/home/michal/tmp/log', print_r($matches, TRUE), FILE_APPEND);
-		foreach ($matches[1] as $token) {
-			$catalogue->set($token, $token);
+		// $this->translator->translate('client.form.name', NULL, array('name' => 'test'))
+		// $this->translator->translate('client.form.name', NULL, ['name' => 'test'])
+		// $this->translator->translate('client.form.name', NULL, $myArray)
+		// $this->translator->translate('client.form.email', 0)
+		preg_match_all(''
+			. '/'	// [0]
+			. '["\']'
+			. '('
+					// domain
+				. '[a-zA-Z0-9_-]+'
+					// parts
+				. '\.'
+				. '[a-zA-Z0-9_-]+'	// according to our convention, you have to specify at least 1 part between domain and word
+				. '(?:\.[a-zA-Z0-9_-]+)*'
+					// word
+				. '\.'
+				. '[a-zA-Z0-9_-]+'
+			. ')'
+			. '["\']'
+			. '(?:'
+				. '\s*,\s*'
+				. '(?:'
+						// pluralization
+					. '([0-9,.]+|NULL)'	// [1]
+					. '(?:'
+						. '\s*,\s*'
+							// placeholders
+						. '(?|'	// [2]
+								. 'array\s*\(\s*([^)]*)\s*\)'	// array()
+							. '|'
+								. '\[\s*([^]]*)\s*\]'	// []
+							. '|'
+								. '(\$[a-zA-Z0-9_]+)'	// $myArray
+						. ')'
+					. ')?'
+				. ')'
+				. '\s*[^,]'
+			. ')?'
+			. '/xi',
+			$fileContent,
+			$matches,
+			PREG_SET_ORDER | PREG_OFFSET_CAPTURE
+		);
+		
+		/*
+		if ($file == '/media/storage/home/michal/www/sunkins_svetzdravi_knt_web/private/app/components/forms/clients/ClientForm.php') {
+			file_put_contents('/home/michal/tmp/log', print_r($matches, TRUE), FILE_APPEND);
 		}
+		*/
+		foreach ($matches as $match) {
+			
+			$id = $match[1][0];
+			$translation = '';
+			$line = self::offsetToLineNumber($fileContent, $match[1][1]);
+			$fileName = $file->getFilename();
+			
+			if (isset($match[2]) && strtoupper($match[2][0]) !== 'NULL') {
+				// pluralization
+				
+				$translation = "%count% jablko|%count% jablka|%count% jablek";
+			}
+			
+			if (isset($match[3])) {
+				// placeholders
+				
+				$parameters = $match[3][0];
+				if (substr($parameters, 0, 1) === '$') {
+					// variable
+					
+					$translation .= " Unknown parameters in variable $parameters: $fileName:$line";
+				} else {
+					// array
+					
+					preg_match_all('/["\']([^"\']+)["\']\s*=>\s*["\'][^"\']+["\']/', $parameters, $parameterMatches);
+					$keys = array();
+					foreach ($parameterMatches[1] as $p) {
+						$keys[] = '%'.$p.'%';
+					}
+					$translation .= '; '. implode(', ', $keys);
+				}
+			}
+			
+			$domain = 'messages';
+			$catalogue->set($id, $translation, $domain);
+		}
+	}
+	
+	protected static function offsetToLineNumber($fileContent, $offset) {
+		return substr_count($fileContent, "\n", 0, $offset) + 1;
 	}
 
 
