@@ -123,12 +123,15 @@ class Translator extends BaseTranslator implements ITranslator
 		}
 
 		if ($domain === NULL) {
+			/*
 			if (strpos($message, '.') !== FALSE && strpos($message, ' ') === FALSE) {
 				list($domain, $message) = explode('.', $message, 2);
 
 			} else {
 				$domain = 'messages';
 			}
+			*/
+			$domain = 'messages';
 		}
 
 		$tmp = array();
