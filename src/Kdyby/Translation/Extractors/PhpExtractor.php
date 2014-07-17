@@ -32,14 +32,16 @@ class PhpExtractor extends Nette\Object implements ExtractorInterface
 	 */
 	private $prefix;
 
-
+	const DEBUG = FALSE;
 
 	/**
 	 * {@inheritDoc}
 	 */
 	public function extract($directory, MessageCatalogue $catalogue)
 	{
-		//file_put_contents('/home/michal/tmp/log', '');
+		if (self::DEBUG) {
+			file_put_contents('/home/michal/tmp/log', '');
+		}
 		foreach (Finder::findFiles('*.php')->from($directory) as $file) {
 			$this->extractFile($file, $catalogue);
 		}
@@ -64,6 +66,7 @@ class PhpExtractor extends Nette\Object implements ExtractorInterface
 		preg_match_all(''
 			. '/'	// [0]
 			. '["\']'
+			. '(?!\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'	// do not match IP address
 			. '('
 					// domain
 				. '[a-zA-Z0-9_-]+'
@@ -101,11 +104,18 @@ class PhpExtractor extends Nette\Object implements ExtractorInterface
 			PREG_SET_ORDER | PREG_OFFSET_CAPTURE
 		);
 		
-		/*
-		if ($file == '/media/storage/home/michal/www/sunkins_svetzdravi_knt_web/private/app/components/forms/clients/ClientForm.php') {
-			file_put_contents('/home/michal/tmp/log', print_r($matches, TRUE), FILE_APPEND);
+		if (self::DEBUG) {
+			file_put_contents('/home/michal/tmp/log', $file->getFilename()."\n", FILE_APPEND);
+			/*
+			if ($file == '/media/storage/home/michal/www/sunkins_svetzdravi_knt_web/private/app/components/forms/clients/ClientForm.php') {
+				file_put_contents('/home/michal/tmp/log', print_r($matches, TRUE), FILE_APPEND);
+			}
+			*/
+			if ($file->getFilename() == 'bootstrap.php') {
+				file_put_contents('/home/michal/tmp/log', print_r($matches, TRUE), FILE_APPEND);
+			}
 		}
-		*/
+		
 		foreach ($matches as $match) {
 			
 			$id = $match[1][0];
