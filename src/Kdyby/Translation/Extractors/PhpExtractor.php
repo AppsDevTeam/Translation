@@ -63,8 +63,8 @@ class PhpExtractor extends Nette\Object implements ExtractorInterface
 		// $this->translator->translate('client.form.name', NULL, ['name' => 'test'])
 		// $this->translator->translate('client.form.name', NULL, $myArray)
 		// $this->translator->translate('client.form.email', 0)
-		preg_match_all(''
-			. '/'	// [0]
+		
+		$matchTranslationString = ''
 			. '["\']'
 			. '(?!\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'	// do not match IP address
 			. '('
@@ -78,26 +78,36 @@ class PhpExtractor extends Nette\Object implements ExtractorInterface
 				. '\.'
 				. '[a-zA-Z0-9_-]+'
 			. ')'
-			. '["\']'
-			. '(?:'
-				. '\s*,\s*'
-				. '(?:'
-						// pluralization
-					. '([0-9,.]+|NULL)'	// [1]
+			. '["\']';
+		
+		preg_match_all(''
+			. '/'	// [0]
+				// if the translation string is the first function's argument try match pluralization's and placeholders' parameters
+			. '(?|'
+				. '\(\s*'	// there is a parenthesis before the first function's argument 
+					. $matchTranslationString
 					. '(?:'
 						. '\s*,\s*'
-							// placeholders
-						. '(?|'	// [2]
-								. 'array\s*\(\s*([^)]*)\s*\)'	// array()
-							. '|'
-								. '\[\s*([^]]*)\s*\]'	// []
-							. '|'
-								. '(\$[a-zA-Z0-9_]+)'	// $myArray
+						. '(?:'
+								// pluralization
+							. '([0-9,.]+|NULL)'	// [1]
+							. '(?:'
+								. '\s*,\s*'
+									// placeholders
+								. '(?|'	// [2]
+										. 'array\s*\(\s*([^)]*)\s*\)'	// array()
+									. '|'
+										. '\[\s*([^]]*)\s*\]'	// []
+									. '|'
+										. '(\$[a-zA-Z0-9_]+)'	// $myArray
+								. ')'
+							. ')?'
 						. ')'
+						. '\s*[^,]'
 					. ')?'
-				. ')'
-				. '\s*[^,]'
-			. ')?'
+				. '|'
+					. $matchTranslationString
+			. ')'
 			. '/xi',
 			$fileContent,
 			$matches,
@@ -105,13 +115,7 @@ class PhpExtractor extends Nette\Object implements ExtractorInterface
 		);
 		
 		if (self::DEBUG) {
-			file_put_contents('/home/michal/tmp/log', $file->getFilename()."\n", FILE_APPEND);
-			/*
 			if ($file == '/media/storage/home/michal/www/sunkins_svetzdravi_knt_web/private/app/components/forms/clients/ClientForm.php') {
-				file_put_contents('/home/michal/tmp/log', print_r($matches, TRUE), FILE_APPEND);
-			}
-			*/
-			if ($file->getFilename() == 'bootstrap.php') {
 				file_put_contents('/home/michal/tmp/log', print_r($matches, TRUE), FILE_APPEND);
 			}
 		}
