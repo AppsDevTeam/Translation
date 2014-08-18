@@ -24,13 +24,8 @@ use Symfony\Component\Translation\MessageCatalogue;
 /**
  * @author Filip Procházka <filip@prochazka.su>
  */
-class LatteExtractor extends Nette\Object implements ExtractorInterface
+class LatteExtractor extends Extractor
 {
-
-	/**
-	 * @var string
-	 */
-	private $prefix;
 
 
 
@@ -66,7 +61,10 @@ class LatteExtractor extends Nette\Object implements ExtractorInterface
 			}
 
 			if ($token->name === '/_') {
-				$catalogue->set(($this->prefix ? $this->prefix . '.' : '') . $buffer, $buffer);
+				
+				if ($this->isIdValid($buffer)) {
+					$catalogue->set(($this->prefix ? $this->prefix . '.' : '') . $buffer, '');
+				}
 				$buffer = NULL;
 
 			} elseif ($token->name === '_' && empty($token->value)) {
@@ -81,19 +79,11 @@ class LatteExtractor extends Nette\Object implements ExtractorInterface
 					$message = substr(trim($message), 1, -1);
 				}
 
-				$catalogue->set(($this->prefix ? $this->prefix . '.' : '') . $message, $message);
+				if ($this->isIdValid($buffer)) {
+					$catalogue->set(($this->prefix ? $this->prefix . '.' : '') . $message, $message);
+				}
 			}
 		}
 	}
-
-
-
-	/**
-	 * {@inheritDoc}
-	 */
-	public function setPrefix($prefix)
-	{
-		$this->prefix = $prefix;
-	}
-
+	
 }

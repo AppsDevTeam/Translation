@@ -162,7 +162,15 @@ class Translator extends BaseTranslator implements ITranslator
 		if ($this->panel !== NULL && $id === $result) { // probably untranslated
 			$this->panel->markUntranslated($id);
 		}
-
+		
+		if (empty($result)) {
+			return $id;
+			/*
+			$pieces = explode('.', $id);
+			return end($pieces);
+			*/
+		}
+		
 		return $result;
 	}
 

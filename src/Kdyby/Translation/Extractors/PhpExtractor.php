@@ -24,15 +24,10 @@ use Symfony\Component\Translation\MessageCatalogue;
 /**
  * @author Filip Procházka <filip@prochazka.su>
  */
-class PhpExtractor extends Nette\Object implements ExtractorInterface
+class PhpExtractor extends Extractor
 {
 
-	/**
-	 * @var string
-	 */
-	private $prefix;
-
-	const DEBUG = FALSE;
+	const DEBUG = TRUE;
 
 	/**
 	 * {@inheritDoc}
@@ -66,25 +61,19 @@ class PhpExtractor extends Nette\Object implements ExtractorInterface
 		
 		$matchTranslationString = ''
 			. '["\']'
-			. '(?!\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'	// do not match IP address
-			. '('
-					// domain
-				. '[a-zA-Z0-9_-]+'
-					// parts
-				. '\.'
-				. '[a-zA-Z0-9_-]+'	// according to our convention, you have to specify at least 1 part between domain and word
-				. '(?:\.[a-zA-Z0-9_-]+)*'
-					// word
-				. '\.'
-				. '[a-zA-Z0-9_-]+'
-			. ')'
+			. self::MATCH_TRANSLATION_STRING
 			. '["\']';
 		
 		preg_match_all(''
 			. '/'	// [0]
+				// do not match these special cases (function names)
+			. '(?<!where)'
+			. '(?<!related)'
+			. '(?<!ref)'
+			. '(?<!setTableName)'
+			. '\(\s*'	// there is a parenthesis before the first function's argument 
 				// if the translation string is the first function's argument try match pluralization's and placeholders' parameters
 			. '(?|'
-				. '\(\s*'	// there is a parenthesis before the first function's argument 
 					. $matchTranslationString
 					. '(?:'
 						. '\s*,\s*'
@@ -115,7 +104,7 @@ class PhpExtractor extends Nette\Object implements ExtractorInterface
 		);
 		
 		if (self::DEBUG) {
-			if ($file == '/media/storage/home/michal/www/sunkins_svetzdravi_knt_web/private/app/components/forms/clients/ClientForm.php') {
+			if ($file == '/media/storage/home/michal/www/genres.cz/private/app/SystemModule/presenters/ReservationPresenter.php') {
 				file_put_contents('/home/michal/tmp/log', print_r($matches, TRUE), FILE_APPEND);
 			}
 		}
@@ -162,14 +151,5 @@ class PhpExtractor extends Nette\Object implements ExtractorInterface
 		return substr_count($fileContent, "\n", 0, $offset) + 1;
 	}
 
-
-
-	/**
-	 * {@inheritDoc}
-	 */
-	public function setPrefix($prefix)
-	{
-		$this->prefix = $prefix;
-	}
 
 }
