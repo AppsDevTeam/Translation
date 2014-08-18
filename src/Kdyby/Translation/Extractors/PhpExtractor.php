@@ -27,16 +27,11 @@ use Symfony\Component\Translation\MessageCatalogue;
 class PhpExtractor extends Extractor
 {
 
-	const DEBUG = TRUE;
-
 	/**
 	 * {@inheritDoc}
 	 */
 	public function extract($directory, MessageCatalogue $catalogue)
 	{
-		if (self::DEBUG) {
-			file_put_contents('/home/michal/tmp/log', '');
-		}
 		foreach (Finder::findFiles('*.php')->from($directory) as $file) {
 			$this->extractFile($file, $catalogue);
 		}
@@ -66,14 +61,14 @@ class PhpExtractor extends Extractor
 		
 		preg_match_all(''
 			. '/'	// [0]
-				// do not match these special cases (function names)
-			. '(?<!where)'
-			. '(?<!related)'
-			. '(?<!ref)'
-			. '(?<!setTableName)'
-			. '\(\s*'	// there is a parenthesis before the first function's argument 
 				// if the translation string is the first function's argument try match pluralization's and placeholders' parameters
 			. '(?|'
+					. '\(\s*'	// there is a parenthesis before the first function's argument 
+						// do not match these special cases (function names)
+					. '(?<!where\()'
+					. '(?<!related\()'
+					. '(?<!ref\()'
+					. '(?<!setTableName\()'
 					. $matchTranslationString
 					. '(?:'
 						. '\s*,\s*'
@@ -95,6 +90,11 @@ class PhpExtractor extends Extractor
 						. '\s*[^,]'
 					. ')?'
 				. '|'
+						// do not match these special cases (function names)
+					. '(?<!where\()'
+					. '(?<!related\()'
+					. '(?<!ref\()'
+					. '(?<!setTableName\()'
 					. $matchTranslationString
 			. ')'
 			. '/xi',
@@ -102,12 +102,6 @@ class PhpExtractor extends Extractor
 			$matches,
 			PREG_SET_ORDER | PREG_OFFSET_CAPTURE
 		);
-		
-		if (self::DEBUG) {
-			if ($file == '/media/storage/home/michal/www/genres.cz/private/app/SystemModule/presenters/ReservationPresenter.php') {
-				file_put_contents('/home/michal/tmp/log', print_r($matches, TRUE), FILE_APPEND);
-			}
-		}
 		
 		foreach ($matches as $match) {
 			

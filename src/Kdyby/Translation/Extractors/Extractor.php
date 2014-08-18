@@ -27,6 +27,8 @@ use Symfony\Component\Translation\MessageCatalogue;
 abstract class Extractor extends Nette\Object implements ExtractorInterface
 {
 
+	const DEBUG = FALSE;
+
 	/**
 	 * @var string
 	 */
@@ -34,6 +36,7 @@ abstract class Extractor extends Nette\Object implements ExtractorInterface
 
 	const MATCH_TRANSLATION_STRING = '
 		(?!\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})	# do not match IP address
+		(?!(?:[a-zA-Z0-9_-]\.){2,}[a-zA-Z0-9_-])	# do not match DateTime string (for example: j.n.Y)
 		(
 			# domain
 			[a-zA-Z0-9_-]+
@@ -43,14 +46,15 @@ abstract class Extractor extends Nette\Object implements ExtractorInterface
 			(?:\.[a-zA-Z0-9_-]+)*
 			# word
 			\.
-			[a-zA-Z0-9_-]{3,}	# last word has to be longer than one char to avoid DateTime strings (for example: j.n.Y)
+			[a-zA-Z0-9_-]+
 		)';
 
 
 	protected function isIdValid($id) {
+		//return TRUE;
 		return preg_match('/'. self::MATCH_TRANSLATION_STRING .'/xi', $id);
 	}
-
+	
 
 
 	/**

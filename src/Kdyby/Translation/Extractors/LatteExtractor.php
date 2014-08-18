@@ -27,13 +27,15 @@ use Symfony\Component\Translation\MessageCatalogue;
 class LatteExtractor extends Extractor
 {
 
-
-
 	/**
 	 * {@inheritDoc}
 	 */
 	public function extract($directory, MessageCatalogue $catalogue)
 	{
+		if (self::DEBUG) {
+			file_put_contents('/home/michal/tmp/log', '');
+		}
+		
 		foreach (Finder::findFiles('*.latte', '*.phtml')->from($directory) as $file) {
 			$this->extractFile($file, $catalogue);
 		}
@@ -62,6 +64,11 @@ class LatteExtractor extends Extractor
 
 			if ($token->name === '/_') {
 				
+				if (self::DEBUG) {
+					if ($file == '/media/storage/home/michal/www/genres.cz/private/app/SystemModule/controls/StockTurnoverControl.latte') {
+						file_put_contents('/home/michal/tmp/log', $this->isIdValid($buffer) .': '. print_r($buffer, TRUE), FILE_APPEND);
+					}
+				}
 				if ($this->isIdValid($buffer)) {
 					$catalogue->set(($this->prefix ? $this->prefix . '.' : '') . $buffer, '');
 				}
@@ -79,6 +86,11 @@ class LatteExtractor extends Extractor
 					$message = substr(trim($message), 1, -1);
 				}
 
+				if (self::DEBUG) {
+					if ($file == '/media/storage/home/michal/www/genres.cz/private/app/SystemModule/controls/StockTurnoverControl.latte') {
+						file_put_contents('/home/michal/tmp/log', $this->isIdValid($message) .': '. print_r($message, TRUE), FILE_APPEND);
+					}
+				}
 				if ($this->isIdValid($message)) {
 					$catalogue->set(($this->prefix ? $this->prefix . '.' : '') . $message, '');
 				}
