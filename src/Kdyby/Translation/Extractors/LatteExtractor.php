@@ -79,8 +79,8 @@ class LatteExtractor extends Extractor
 					$message = substr(trim($message), 1, -1);
 				}
 
-				if ($this->isIdValid($buffer)) {
-					$catalogue->set(($this->prefix ? $this->prefix . '.' : '') . $message, $message);
+				if ($this->isIdValid($message)) {
+					$catalogue->set(($this->prefix ? $this->prefix . '.' : '') . $message, '');
 				}
 			}
 		}
