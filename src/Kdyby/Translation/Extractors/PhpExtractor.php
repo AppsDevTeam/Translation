@@ -59,16 +59,21 @@ class PhpExtractor extends Extractor
 			. self::MATCH_TRANSLATION_STRING
 			. '["\']';
 		
-		preg_match_all(''
-			. '/'	// [0]
-				// if the translation string is the first function's argument try match pluralization's and placeholders' parameters
-			. '(?|'
-					. '\(\s*'	// there is a parenthesis before the first function's argument 
-						// do not match these special cases (function names)
+		// do not match these special cases (function names)
+		$exceptions = ''
 					. '(?<!where\()'
 					. '(?<!related\()'
 					. '(?<!ref\()'
 					. '(?<!setTableName\()'
+					. '(?<!\.)'
+					. '(?<!\.\s)';
+		
+		preg_match_all($a = ''
+			. '/'	// [0]
+				// if the translation string is the first function's argument try match pluralization's and placeholders' parameters
+			. '(?|'
+					. '\(\s*'	// there is a parenthesis before the first function's argument
+					. $exceptions
 					. $matchTranslationString
 					. '(?:'
 						. '\s*,\s*'
@@ -90,11 +95,7 @@ class PhpExtractor extends Extractor
 						. '\s*[^,]'
 					. ')?'
 				. '|'
-						// do not match these special cases (function names)
-					. '(?<!where\()'
-					. '(?<!related\()'
-					. '(?<!ref\()'
-					. '(?<!setTableName\()'
+					. $exceptions
 					. $matchTranslationString
 			. ')'
 			. '/xi',
@@ -102,6 +103,7 @@ class PhpExtractor extends Extractor
 			$matches,
 			PREG_SET_ORDER | PREG_OFFSET_CAPTURE
 		);
+		file_put_contents('/home/michal/tmp/log', $a);
 		
 		foreach ($matches as $match) {
 			
