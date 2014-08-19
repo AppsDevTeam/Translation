@@ -67,6 +67,11 @@ class ExtractCommand extends Command
 	private $scanDirs;
 
 	/**
+	 * @var array
+	 */
+	private $excludedPrefixes;
+
+	/**
 	 * @var string
 	 */
 	private $outputDir;
@@ -80,7 +85,8 @@ class ExtractCommand extends Command
 			->addOption('scan-dir', 'd', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, "The directory to parse the translations. Can contain %placeholders%.", array('%appDir%'))
 			->addOption('output-format', 'f', InputOption::VALUE_REQUIRED, "Format name of the messages.")
 			->addOption('output-dir', 'o', InputOption::VALUE_OPTIONAL, "Directory to write the messages to. Can contain %placeholders%.", $this->defaultOutputDir)
-			->addOption('catalogue-language', 'l', InputOption::VALUE_OPTIONAL, "The language of the catalogue", 'en_US');
+			->addOption('catalogue-language', 'l', InputOption::VALUE_OPTIONAL, "The language of the catalogue", 'en_US')
+			->addOption('exclude-prefix', 'e', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, "The prefix to exclude from extract.");
 			// todo: append
 	}
 
@@ -120,6 +126,8 @@ class ExtractCommand extends Command
 
 			return FALSE;
 		}
+		
+		$this->excludedPrefixes = $this->serviceLocator->expand($input->getOption('exclude-prefix'));
 
 		return TRUE;
 	}
@@ -137,11 +145,13 @@ class ExtractCommand extends Command
 			$output->writeln(sprintf('<info>Extracting %s</info>', $dir));
 			$this->extractor->extract($dir, $catalogue);
 		}
+		$this->excludePrefixes($catalogue, $this->excludedPrefixes, FALSE);
 		
 		$existingCatalogue = new MessageCatalogue($input->getOption('catalogue-language'));
 		$this->loader->loadMessages($this->outputDir, $existingCatalogue);
+		$this->excludePrefixes($existingCatalogue, $this->excludedPrefixes);
 		$catalogue->addCatalogue($existingCatalogue);
-
+		
 		$this->writer->writeTranslations($catalogue, $this->outputFormat, array(
 			'path' => $this->outputDir,
 		));
@@ -150,6 +160,38 @@ class ExtractCommand extends Command
 		$output->writeln(sprintf('<info>Catalogue was written to %s</info>', $this->outputDir));
 
 		return 0;
+	}
+	
+	protected function excludePrefixes(MessageCatalogue &$catalogue, $excludedPrefixes, $onlyEmpty = TRUE) {
+		
+		$outCatalogue = new MessageCatalogue($catalogue->getLocale());
+		
+		foreach ($catalogue->all() as $domain => $messages) {
+			$outMessages = array();
+			
+			foreach ($messages as $id => $translation) {
+
+				$include = TRUE;
+				foreach ($excludedPrefixes as $p) {
+					if (strpos($id, $p) === 0) {
+						$include = FALSE;
+						break;
+					}
+				}
+				if (
+					$include
+					||
+					($onlyEmpty && ! empty($translation))
+				) {
+					$outMessages[$id] = $translation;
+				}
+
+			}
+			
+			$outCatalogue->add($outMessages, $domain);
+		}
+		
+		$catalogue = $outCatalogue;
 	}
 
 }
