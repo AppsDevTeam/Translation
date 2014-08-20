@@ -74,7 +74,7 @@ class ExtractCommand extends Command
 	/**
 	 * @var array
 	 */
-	private $excludePrefixFolder;
+	private $excludePrefixFile;
 
 	/**
 	 * @var string
@@ -92,7 +92,7 @@ class ExtractCommand extends Command
 			->addOption('output-dir', 'o', InputOption::VALUE_OPTIONAL, "Directory to write the messages to. Can contain %placeholders%.", $this->defaultOutputDir)
 			->addOption('catalogue-language', 'l', InputOption::VALUE_OPTIONAL, "The language of the catalogue", 'en_US')
 			->addOption('exclude-prefix', 'e', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, "The prefix(es) to exclude from extract.")
-			->addOption('exclude-prefix-folder', 'ef', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, "The file(s) with prefixes to exclude from extract.");
+			->addOption('exclude-prefix-file', 'ef', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, "The file(s) with prefixes to exclude from extract.");
 			// todo: append
 	}
 
@@ -135,10 +135,10 @@ class ExtractCommand extends Command
 		
 		$this->excludedPrefixes = $this->serviceLocator->expand($input->getOption('exclude-prefix'));
 
-		$this->excludePrefixFolder = $this->serviceLocator->expand($input->getOption('exclude-prefix-folder'));
-		foreach ($this->excludePrefixFolder as $file) {
+		$this->excludePrefixFile = $this->serviceLocator->expand($input->getOption('exclude-prefix-file'));
+		foreach ($this->excludePrefixFile as $file) {
 			if (!is_file($file)) {
-				$output->writeln(sprintf('<error>Given --exclude-prefix-folder "%s" does not exists.</error>', $file));
+				$output->writeln(sprintf('<error>Given --exclude-prefix-file "%s" does not exists.</error>', $file));
 
 				return FALSE;
 			}
@@ -155,7 +155,7 @@ class ExtractCommand extends Command
 			return 1;
 		}
 		
-		foreach ($this->excludePrefixFolder as $file) {
+		foreach ($this->excludePrefixFile as $file) {
 			$this->excludedPrefixes += preg_split('/\s+/', trim(file_get_contents($file)));
 		}
 
