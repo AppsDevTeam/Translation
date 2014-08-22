@@ -66,7 +66,8 @@ class PhpExtractor extends Extractor
 					. '(?<!ref\()'
 					. '(?<!setTableName\()'
 					. '(?<!\.)'
-					. '(?<!\.\s)';
+					. '(?<!\.\s)'
+					. '(?<!\/\*\*\*\/)';
 		
 		preg_match_all($a = ''
 			. '/'	// [0]
