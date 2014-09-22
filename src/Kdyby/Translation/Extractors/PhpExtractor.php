@@ -104,7 +104,9 @@ class PhpExtractor extends Extractor
 			$matches,
 			PREG_SET_ORDER | PREG_OFFSET_CAPTURE
 		);
-		file_put_contents('/home/michal/tmp/log', $a);
+		if (self::DEBUG) {
+			file_put_contents('/home/michal/tmp/log', $a);
+		}
 		
 		foreach ($matches as $match) {
 			
