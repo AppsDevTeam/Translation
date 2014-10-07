@@ -200,6 +200,16 @@ class ExtractCommand extends Command
 			die();
 			*/
 			
+			
+			$response = $oneSky->files('upload', array(
+				'project_id' => 33906,
+				'file' => $file->getRealPath(),
+				'file_format' => 'GNU_PO',
+				'locale' => $locale,
+			));
+			print_r(json_decode($response, true));
+			
+			
 			$response = $oneSky->translations('export', array(
 				'project_id' => 33906,
 				'locale' => $locale,
@@ -215,13 +225,6 @@ class ExtractCommand extends Command
 				print_r($decodedResponse);
 			}
 			
-			$response = $oneSky->files('upload', array(
-				'project_id' => 33906,
-				'file' => $file->getRealPath(),
-				'file_format' => 'GNU_PO',
-				'locale' => $locale,
-			));
-			print_r(json_decode($response, true));
 		}
 		
 		return 0;
