@@ -104,21 +104,19 @@ class PhpExtractor extends Extractor
 			$matches,
 			PREG_SET_ORDER | PREG_OFFSET_CAPTURE
 		);
-		if (self::DEBUG) {
-			file_put_contents('/home/michal/tmp/log', $a);
-		}
+		file_put_contents('/home/michal/tmp/log', $a);
 		
 		foreach ($matches as $match) {
 			
 			$id = $match[1][0];
-			$translation = '';
+			$translation = array();
 			$line = self::offsetToLineNumber($fileContent, $match[1][1]);
 			$fileName = $file->getFilename();
 			
 			if (isset($match[2]) && strtoupper($match[2][0]) !== 'NULL') {
 				// pluralization
 				
-				$translation = "%count% jablko|%count% jablka|%count% jablek";
+				$translation[] = "%count% jablko|%count% jablka|%count% jablek";
 			}
 			
 			if (isset($match[3])) {
@@ -128,18 +126,21 @@ class PhpExtractor extends Extractor
 				if (substr($parameters, 0, 1) === '$') {
 					// variable
 					
-					$translation .= " Unknown parameters in variable $parameters: $fileName:$line";
+					$translation[] = "Unknown parameters in variable $parameters: $fileName:$line";
 				} else {
 					// array
 					
-					preg_match_all('/["\']([^"\']+)["\']\s*=>\s*["\'][^"\']+["\']/', $parameters, $parameterMatches);
+					preg_match_all('/["\']([^"\']+)["\']\s*=>/', $parameters, $parameterMatches);
 					$keys = array();
 					foreach ($parameterMatches[1] as $p) {
 						$keys[] = '%'.$p.'%';
 					}
-					$translation .= '; '. implode(', ', $keys);
+					$translation[] = implode(', ', $keys);
 				}
 			}
+			
+			$translation = '@@@@@ ' . implode('; ', $translation);
+			$translation = '';
 			
 			$domain = 'messages';
 			$catalogue->set($id, $translation, $domain);

@@ -12,6 +12,7 @@ namespace Kdyby\Translation\Console;
 
 use Kdyby;
 use Nette;
+use Nette\Utils\Finder;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -178,6 +179,51 @@ class ExtractCommand extends Command
 		$output->writeln('');
 		$output->writeln(sprintf('<info>Catalogue was written to %s</info>', $this->outputDir));
 
+		$lang = $input->getOption('catalogue-language');
+		require 'Onesky_Api.php';
+		$oneSky = new \Onesky_Api();
+		$oneSkyParameters = $this->serviceLocator->parameters['oneSky'];
+		$oneSky->setApiKey($oneSkyParameters['apiKey'])->setSecret($oneSkyParameters['apiSecret']);
+		foreach (Finder::findFiles('*'. $lang .'.po')->in($this->outputDir) as $file) {
+			
+			$matches = array();
+			preg_match('/^(.+)\.(.+)\.(.+)$/', $file->getFilename(), $matches);
+			$filename = $matches[1];
+			$locale = $matches[2];
+			$extension = $matches[3];
+			
+			/*
+			$response = $oneSky->files('list', array(
+				'project_id' => 33906,
+			));
+			print_r(json_decode($response, true));
+			die();
+			*/
+			
+			$response = $oneSky->translations('export', array(
+				'project_id' => 33906,
+				'locale' => $locale,
+				'source_file_name' => $filename .'.'. $extension,
+				'export_file_name' => $file->getFilename(),
+			));
+			$decodedResponse = json_decode($response, true);
+			if ($decodedResponse === NULL) {
+				// v pořádku
+				
+				file_put_contents($file->getRealPath(), $response);
+			} else {
+				print_r($decodedResponse);
+			}
+			
+			$response = $oneSky->files('upload', array(
+				'project_id' => 33906,
+				'file' => $file->getRealPath(),
+				'file_format' => 'GNU_PO',
+				'locale' => $locale,
+			));
+			print_r(json_decode($response, true));
+		}
+		
 		return 0;
 	}
 	
