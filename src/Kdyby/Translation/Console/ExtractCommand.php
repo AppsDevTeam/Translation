@@ -26,6 +26,8 @@ use Symfony\Component\Translation\MessageCatalogue;
  */
 class ExtractCommand extends Command
 {
+	
+	const ONESKY_DEFAULT_LANG = 'cs';
 
 	/**
 	 * @var string
@@ -198,10 +200,17 @@ class ExtractCommand extends Command
 			die();
 			*/
 			
+			if ($locale === self::ONESKY_DEFAULT_LANG) {
+				$uploadFilePathName = $file->getPath() .'/'. $filename .'.'. $extension;
+				copy($file->getRealPath(), $uploadFilePathName);
+			} else {
+				$uploadFilePathName = $file->getRealPath();
+			}
+			
 			// upload existujících překladů na server
 			$response = $oneSky->files('upload', array(
 				'project_id' => 33906,
-				'file' => $file->getRealPath(),
+				'file' => $uploadFilePathName,
 				'file_format' => 'GNU_PO',
 				'locale' => $locale,
 			));
