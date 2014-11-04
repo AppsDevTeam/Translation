@@ -95,7 +95,9 @@ class ExtractCommand extends Command
 			->addOption('output-dir', 'o', InputOption::VALUE_OPTIONAL, "Directory to write the messages to. Can contain %placeholders%.", $this->defaultOutputDir)
 			->addOption('catalogue-language', 'l', InputOption::VALUE_OPTIONAL, "The language of the catalogue", 'en_US')
 			->addOption('exclude-prefix', 'e', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, "The prefix(es) to exclude from extract.")
-			->addOption('exclude-prefix-file', 'ef', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, "The file(s) with prefixes to exclude from extract.");
+			->addOption('exclude-prefix-file', 'ef', InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, "The file(s) with prefixes to exclude from extract.")
+			->addOption('onesky-download', 'od', InputOption::VALUE_NONE, "Download translations from OneSky.")
+			->addOption('onesky-upload', 'ou', InputOption::VALUE_NONE, "Upload translations to OneSky.");
 			// todo: append
 	}
 
@@ -117,6 +119,12 @@ class ExtractCommand extends Command
 		if (!in_array($this->outputFormat = trim($input->getOption('output-format'), '='), $formats = $this->writer->getFormats(), TRUE)) {
 			$output->writeln('<error>Unknown --output-format</error>');
 			$output->writeln(sprintf("<info>Choose one of: %s</info>", implode(', ', $formats)));
+
+			return FALSE;
+		}
+		
+		if (($input->getOption('onesky-download') || $input->getOption('onesky-upload')) && empty($this->serviceLocator->parameters['oneSky'])) {
+			$output->writeln('<error>Please specify OneSky parameters in config first.</error>');
 
 			return FALSE;
 		}
@@ -178,69 +186,78 @@ class ExtractCommand extends Command
 
 		// OneSky
 		
-		$oneSkyDir = \ADT\Utils::tempnamDir(sys_get_temp_dir(), 'kdyby');	// temp dir
-		$lang = $input->getOption('catalogue-language');
-		require 'Onesky_Api.php';
-		$oneSky = new \Onesky_Api();
-		$oneSkyParameters = $this->serviceLocator->parameters['oneSky'];
-		$oneSky->setApiKey($oneSkyParameters['apiKey'])->setSecret($oneSkyParameters['apiSecret']);
-		foreach (Finder::findFiles('*'. $lang .'.po')->in($this->outputDir) as $file) {
+		if ($input->getOption('onesky-download') || $input->getOption('onesky-upload')) {
 			
-			$matches = array();
-			preg_match('/^(.+)\.(.+)\.(.+)$/', $file->getFilename(), $matches);
-			$filename = $matches[1];
-			$locale = $matches[2];
-			$extension = $matches[3];
-			
-			/*
-			$response = $oneSky->files('list', array(
-				'project_id' => 33906,
-			));
-			print_r(json_decode($response, true));
-			die();
-			*/
-			
-			if ($locale === self::ONESKY_DEFAULT_LANG) {
-				$uploadFilePathName = $file->getPath() .'/'. $filename .'.'. $extension;
-				copy($file->getRealPath(), $uploadFilePathName);
-			} else {
-				$uploadFilePathName = $file->getRealPath();
-			}
-			
-			// upload existujících překladů na server
-			$response = $oneSky->files('upload', array(
-				'project_id' => 33906,
-				'file' => $uploadFilePathName,
-				'file_format' => 'GNU_PO',
-				'locale' => $locale,
-			));
-			print_r(json_decode($response, true));
-			
-			// stažení existujících překladů ze serveru
-			$response = $oneSky->translations('export', array(
-				'project_id' => 33906,
-				'locale' => $locale,
-				'source_file_name' => $filename .'.'. $extension,
-				'export_file_name' => $file->getFilename(),
-			));
-			$decodedResponse = json_decode($response, true);
-			if ($decodedResponse === NULL) {
-				// v pořádku
+			$oneSkyDir = \ADT\Utils::tempnamDir(sys_get_temp_dir(), 'kdyby');	// temp dir
+			$lang = $input->getOption('catalogue-language');
+			require 'Onesky_Api.php';
+			$oneSky = new \Onesky_Api();
+			$oneSkyParameters = $this->serviceLocator->parameters['oneSky'];
+			$oneSky->setApiKey($oneSkyParameters['apiKey'])->setSecret($oneSkyParameters['apiSecret']);
+			foreach (Finder::findFiles('*'. $lang .'.po')->in($this->outputDir) as $file) {
+
+				$matches = array();
+				preg_match('/^(.+)\.(.+)\.(.+)$/', $file->getFilename(), $matches);
+				$filename = $matches[1];
+				$locale = $matches[2];
+				$extension = $matches[3];
+
+				/*
+				$response = $oneSky->files('list', array(
+					'project_id' => 33906,
+				));
+				print_r(json_decode($response, true));
+				die();
+				*/
+
+				if ($locale === self::ONESKY_DEFAULT_LANG) {
+					$uploadFilePathName = $file->getPath() .'/'. $filename .'.'. $extension;
+					copy($file->getRealPath(), $uploadFilePathName);
+				} else {
+					$uploadFilePathName = $file->getRealPath();
+				}
+
+				// upload existujících překladů na server
+				if ($input->getOption('onesky-upload')) {
+					$response = $oneSky->files('upload', array(
+						'project_id' => 33906,
+						'file' => $uploadFilePathName,
+						'file_format' => 'GNU_PO',
+						'locale' => $locale,
+					));
+					print_r(json_decode($response, true));
+				}
 				
-				file_put_contents($oneSkyDir .'/'. $file->getFilename(), $response);
-			} else {
-				print_r($decodedResponse);
+				// stažení existujících překladů ze serveru
+				if ($input->getOption('onesky-download')) {
+					$response = $oneSky->translations('export', array(
+						'project_id' => 33906,
+						'locale' => $locale,
+						'source_file_name' => $filename .'.'. $extension,
+						'export_file_name' => $file->getFilename(),
+					));
+					$decodedResponse = json_decode($response, true);
+					if ($decodedResponse === NULL) {
+						// v pořádku
+
+						file_put_contents($oneSkyDir .'/'. $file->getFilename(), $response);
+					} else {
+						print_r($decodedResponse);
+					}
+				}
+				
 			}
-			
+
+			// překlady z OneSky
+			if ($input->getOption('onesky-download')) {
+				$oneSkyCatalogue = new MessageCatalogue($input->getOption('catalogue-language'));
+				$this->loader->loadMessages($oneSkyDir, $oneSkyCatalogue);
+				$this->excludePrefixes($existingCatalogue, $this->excludedPrefixes);
+				$catalogue->addCatalogue($oneSkyCatalogue);
+			}
+			\ADT\Utils::rmdir_r($oneSkyDir);
+		
 		}
-		
-		// překlady z OneSky
-		$oneSkyCatalogue = new MessageCatalogue($input->getOption('catalogue-language'));
-		$this->loader->loadMessages($oneSkyDir, $oneSkyCatalogue);
-		$this->excludePrefixes($existingCatalogue, $this->excludedPrefixes);
-		$catalogue->addCatalogue($oneSkyCatalogue);
-		
-		\ADT\Utils::rmdir_r($oneSkyDir);
 		
 		$this->writer->writeTranslations($catalogue, $this->outputFormat, array(
 			'path' => $this->outputDir,
