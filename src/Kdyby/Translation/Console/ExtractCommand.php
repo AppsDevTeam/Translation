@@ -26,7 +26,7 @@ use Symfony\Component\Translation\MessageCatalogue;
  */
 class ExtractCommand extends Command
 {
-	
+
 	const ONESKY_DEFAULT_LANG = 'cs';
 
 	/**
@@ -122,9 +122,15 @@ class ExtractCommand extends Command
 
 			return FALSE;
 		}
-		
+
 		if (($input->getOption('onesky-download') || $input->getOption('onesky-upload')) && empty($this->serviceLocator->parameters['oneSky'])) {
 			$output->writeln('<error>Please specify OneSky parameters in config first.</error>');
+
+			return FALSE;
+		}
+
+		if ($input->getOption('onesky-download') && $input->getOption('onesky-upload')) {
+			$output->writeln('<error>Specify maximally one from the following options: onesky-download, onesky-upload.</error>');
 
 			return FALSE;
 		}
@@ -143,7 +149,7 @@ class ExtractCommand extends Command
 
 			return FALSE;
 		}
-		
+
 		$this->excludedPrefixes = $this->serviceLocator->expand($input->getOption('exclude-prefix'));
 
 		$this->excludePrefixFile = $this->serviceLocator->expand($input->getOption('exclude-prefix-file'));
@@ -165,36 +171,53 @@ class ExtractCommand extends Command
 		if ($this->validate($input, $output) !== TRUE) {
 			return 1;
 		}
-		
+
 		foreach ($this->excludePrefixFile as $file) {
 			$this->excludedPrefixes += preg_split('/\s+/', trim(file_get_contents($file)));
 		}
 
-		// překlady ze zdrojových kódů
-		$catalogue = new MessageCatalogue($input->getOption('catalogue-language'));
-		foreach ($this->scanDirs as $dir) {
-			$output->writeln(sprintf('<info>Extracting %s</info>', $dir));
-			$this->extractor->extract($dir, $catalogue);
-		}
-		$this->excludePrefixes($catalogue, $this->excludedPrefixes, FALSE);
-		
-		// překlady ze souborů v app/lang
-		$existingCatalogue = new MessageCatalogue($input->getOption('catalogue-language'));
-		$this->loader->loadMessages($this->outputDir, $existingCatalogue);
-		$this->excludePrefixes($existingCatalogue, $this->excludedPrefixes);
-		$catalogue->addCatalogue($existingCatalogue);
+		if (! $input->getOption('onesky-download') && ! $input->getOption('onesky-upload')) {
+			// extrahovat překlady ze zdrojáků do češtiny, ale zobrazit pouze nepřeložené
 
-		// OneSky
-		
-		if ($input->getOption('onesky-download') || $input->getOption('onesky-upload')) {
-			
-			$oneSkyDir = \ADT\Utils::tempnamDir(sys_get_temp_dir(), 'kdyby');	// temp dir
+			// překlady ze zdrojových kódů
+			$catalogue = new MessageCatalogue($input->getOption('catalogue-language'));
+			foreach ($this->scanDirs as $dir) {
+				$output->writeln(sprintf('<info>Extracting %s</info>', $dir));
+				$this->extractor->extract($dir, $catalogue);
+			}
+			$this->excludePrefixes($catalogue, $this->excludedPrefixes, FALSE);
+
+			// překlady ze souborů v app/lang
+			$existingCatalogue = new MessageCatalogue($input->getOption('catalogue-language'));
+			$this->loader->loadMessages($this->outputDir, $existingCatalogue);
+			$this->excludePrefixes($existingCatalogue, $this->excludedPrefixes);
+			$catalogue->addCatalogue($existingCatalogue);
+
+			// zobraz pouze prázdné překlady k přeložení
+			$this->filterTranslations($catalogue, TRUE);
+
+			$this->writer->writeTranslations($catalogue, $this->outputFormat, array(
+				'path' => $this->outputDir,
+			));
+
+			$output->writeln(sprintf('<info>Catalogue was written to %s</info>', $this->outputDir));
+
+		} else if ($input->getOption('onesky-download') || $input->getOption('onesky-upload')) {
+
+			// OneSky
+
+			if ($input->getOption('onesky-download')) {
+				$oneSkyDir = \ADT\Utils::tempnamDir(sys_get_temp_dir(), 'kdyby');	// temp dir
+			}
 			$lang = $input->getOption('catalogue-language');
+
 			require 'Onesky_Api.php';
 			$oneSky = new \Onesky_Api();
 			$oneSkyParameters = $this->serviceLocator->parameters['oneSky'];
 			$oneSky->setApiKey($oneSkyParameters['apiKey'])->setSecret($oneSkyParameters['apiSecret']);
+
 			foreach (Finder::findFiles('*'. $lang .'.po')->in($this->outputDir) as $file) {
+				// všechny soubory s překlady daného jazyka
 
 				$matches = array();
 				preg_match('/^(.+)\.(.+)\.(.+)$/', $file->getFilename(), $matches);
@@ -219,6 +242,8 @@ class ExtractCommand extends Command
 
 				// upload existujících překladů na server
 				if ($input->getOption('onesky-upload')) {
+					$output->writeln(sprintf('<info>Uploading \'%s\' catalogue to OneSkyApp</info>', $lang));
+
 					$response = $oneSky->files('upload', array(
 						'project_id' => 33906,
 						'file' => $uploadFilePathName,
@@ -227,9 +252,11 @@ class ExtractCommand extends Command
 					));
 					print_r(json_decode($response, true));
 				}
-				
+
 				// stažení existujících překladů ze serveru
 				if ($input->getOption('onesky-download')) {
+					$output->writeln(sprintf('<info>Downloading \'%s\' catalogue from OneSkyApp</info>', $lang));
+
 					$response = $oneSky->translations('export', array(
 						'project_id' => 33906,
 						'locale' => $locale,
@@ -245,42 +272,51 @@ class ExtractCommand extends Command
 						print_r($decodedResponse);
 					}
 				}
-				
+
 			}
 
-			// překlady z OneSky
+			// stažení existujících překladů ze serveru
 			if ($input->getOption('onesky-download')) {
 				$oneSkyCatalogue = new MessageCatalogue($input->getOption('catalogue-language'));
 				$this->loader->loadMessages($oneSkyDir, $oneSkyCatalogue);
-				$this->excludePrefixes($existingCatalogue, $this->excludedPrefixes);
-				$catalogue->addCatalogue($oneSkyCatalogue);
-			}
-			\ADT\Utils::rmdir_r($oneSkyDir);
-		
-		}
-		
-		$this->writer->writeTranslations($catalogue, $this->outputFormat, array(
-			'path' => $this->outputDir,
-		));
+				$this->excludePrefixes($oneSkyCatalogue, $this->excludedPrefixes);
 
-		$output->writeln('');
-		$output->writeln(sprintf('<info>Catalogue was written to %s</info>', $this->outputDir));
-		
+				$this->writer->writeTranslations($oneSkyCatalogue, $this->outputFormat, array(
+					'path' => $this->outputDir,
+				));
+
+				$output->writeln(sprintf('<info>Catalogue was written to %s</info>', $this->outputDir));
+
+				\ADT\Utils::rmdir_r($oneSkyDir);
+			}
+
+			if ($input->getOption('onesky-upload')) {
+				$output->writeln(sprintf('<info>Catalogue has been uploaded to OneSkyApp</info>', $this->outputDir));
+			}
+
+		}
+
 		return 0;
 	}
-	
+
+	/**
+	 * Ze vstupního katalogu smaže překlady s klíči v $excludedPrefixes.
+	 * @param MessageCatalogue $catalogue
+	 * @param array $excludedPrefixes
+	 * @param boolean $onlyEmpty Smazat klíč pouze pokud je překlad prázdný?
+	 */
 	protected function excludePrefixes(MessageCatalogue &$catalogue, $excludedPrefixes, $onlyEmpty = TRUE) {
-		
+
 		$outCatalogue = new MessageCatalogue($catalogue->getLocale());
-		
+
 		foreach ($catalogue->all() as $domain => $messages) {
 			$outMessages = array();
-			
+
 			foreach ($messages as $id => $translation) {
 
 				$include = TRUE;
 				foreach ($excludedPrefixes as $p) {
-					if (strpos($id, $p) === 0) {
+					if (strpos($id, $p) === 0) {	// je to prefix
 						$include = FALSE;
 						break;
 					}
@@ -294,10 +330,34 @@ class ExtractCommand extends Command
 				}
 
 			}
-			
+
 			$outCatalogue->add($outMessages, $domain);
 		}
-		
+
+		$catalogue = $outCatalogue;
+	}
+
+	/**
+	 * Ze vstupního katalogu smaže prázdné nebo neprázdné překlady.
+	 * @param MessageCatalogue $catalogue
+	 * @param boolean $empty Mají se mazat _prázdné_ překlady?
+	 */
+	protected function filterTranslations(MessageCatalogue &$catalogue, $empty = FALSE) {
+
+		$outCatalogue = new MessageCatalogue($catalogue->getLocale());
+
+		foreach ($catalogue->all() as $domain => $messages) {
+			$outMessages = array();
+
+			foreach ($messages as $id => $translation) {
+				if ($empty === empty($translation)) {
+					$outMessages[$id] = $translation;
+				}
+			}
+
+			$outCatalogue->add($outMessages, $domain);
+		}
+
 		$catalogue = $outCatalogue;
 	}
 
