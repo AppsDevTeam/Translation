@@ -207,7 +207,7 @@ class ExtractCommand extends Command
 			// OneSky
 
 			if ($input->getOption('onesky-download')) {
-				$oneSkyDir = \ADT\Utils::tempnamDir(sys_get_temp_dir(), 'kdyby');	// temp dir
+				$oneSkyDir = static::tempnamDir(sys_get_temp_dir(), 'kdyby');	// temp dir
 			}
 			$lang = $input->getOption('catalogue-language');
 
@@ -287,7 +287,7 @@ class ExtractCommand extends Command
 
 				$output->writeln(sprintf('<info>Catalogue was written to %s</info>', $this->outputDir));
 
-				\ADT\Utils::rmdir_r($oneSkyDir);
+				static::rmdir_r($oneSkyDir);
 			}
 
 			if ($input->getOption('onesky-upload')) {
@@ -359,6 +359,39 @@ class ExtractCommand extends Command
 		}
 
 		$catalogue = $outCatalogue;
+	}
+
+
+	/**
+	 * Funguje podobně jako tempnam. Vytvoří složku s unikátním názvem.
+	 * @param string $dir
+	 * @param string $prefix
+	 * @return string|FALSE
+	 */
+	public static function tempnamDir($dir, $prefix) {
+		$tempfile = tempnam($dir, $prefix);
+
+		if (file_exists($tempfile))
+			unlink($tempfile);
+
+		mkdir($tempfile);
+
+		return $tempfile;
+	}
+
+	/**
+	 * Remove dir recursive
+	 */
+	public static function rmdir_r($dirName) {
+		if (is_dir($dirName)) {
+			foreach (glob($dirName . '/*') as $file) {
+				if (is_dir($file))
+					self::rmdir_r($file);
+				else
+					unlink($file);
+			}
+			rmdir($dirName);
+		}
 	}
 
 }
