@@ -14,7 +14,6 @@ use Kdyby;
 use Nette;
 use Nette\Caching\Cache;
 use Nette\PhpGenerator as Code;
-use Symfony\Component\Translation\MessageCatalogue;
 use Symfony\Component\Translation\MessageCatalogueInterface;
 
 
@@ -36,11 +35,6 @@ class CatalogueCompiler extends Nette\Object
 	private $fallbackResolver;
 
 	/**
-	 * @var LoadersInitializer
-	 */
-	private $loadersInitializer;
-
-	/**
 	 * @var CatalogueFactory
 	 */
 	private $catalogueFactory;
@@ -48,12 +42,11 @@ class CatalogueCompiler extends Nette\Object
 
 
 	public function __construct(Nette\Caching\IStorage $cacheStorage, FallbackResolver $fallbackResolver,
-		CatalogueFactory $catalogueFactory, LoadersInitializer $loadersInitializer)
+		CatalogueFactory $catalogueFactory)
 	{
 		$this->cache = new Cache($cacheStorage, 'Kdyby\\Translation\\Translator');
 		$this->fallbackResolver = $fallbackResolver;
 		$this->catalogueFactory = $catalogueFactory;
-		$this->loadersInitializer = $loadersInitializer;
 	}
 
 
@@ -64,6 +57,25 @@ class CatalogueCompiler extends Nette\Object
 	public function enableDebugMode()
 	{
 		$this->cache = new Cache(new Nette\Caching\Storages\MemoryStorage());
+	}
+
+
+
+	public function invalidateCache()
+	{
+		$this->cache->clean(array(Cache::ALL => TRUE));
+	}
+
+
+	/**
+	 * @param string $format
+	 * @param string $resource
+	 * @param string $locale
+	 * @param string|NULL $domain
+	 */
+	public function addResource($format, $resource, $locale, $domain = NULL)
+	{
+		$this->catalogueFactory->addResource($format, $resource, $locale, $domain);
 	}
 
 
@@ -93,7 +105,6 @@ class CatalogueCompiler extends Nette\Object
 				return $availableCatalogues;
 			}
 
-			$this->loadersInitializer->initialize($translator);
 			$this->catalogueFactory->createCatalogue($translator, $availableCatalogues, $locale);
 			$this->cache->save($cacheKey, $availableCatalogues[$locale]->all());
 			return $availableCatalogues;
@@ -103,7 +114,6 @@ class CatalogueCompiler extends Nette\Object
 
 		$cached = $compiled = $this->cache->load($cacheKey);
 		if ($compiled === NULL) {
-			$this->loadersInitializer->initialize($translator);
 			$this->catalogueFactory->createCatalogue($translator, $availableCatalogues, $locale);
 			$this->cache->save($cacheKey, $compiled = $this->compilePhpCache($translator, $availableCatalogues, $locale));
 			$cached = $this->cache->load($cacheKey);
@@ -127,7 +137,7 @@ class CatalogueCompiler extends Nette\Object
 		$fallbackContent = '';
 		$current = new Code\PhpLiteral('');
 		foreach ($this->fallbackResolver->compute($translator, $locale) as $fallback) {
-			$fallbackSuffix = new Code\PhpLiteral(ucfirst(str_replace('-', '_', $fallback)));
+			$fallbackSuffix = new Code\PhpLiteral(ucfirst(preg_replace('~[^a-z0-9_]~i', '_', $fallback)));
 
 			$fallbackContent .= Code\Helpers::format(<<<EOF
 \$catalogue? = new MessageCatalogue(?, ?);
@@ -140,7 +150,7 @@ EOF
 		}
 
 		$content = Code\Helpers::format(<<<EOF
-use Symfony\Component\Translation\MessageCatalogue;
+use Kdyby\\Translation\\MessageCatalogue;
 
 \$catalogue = new MessageCatalogue(?, ?);
 

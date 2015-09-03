@@ -8,10 +8,8 @@ It implements `Nette\Localization\ITranslator` using [Symfony/Translation](https
 
 The best way to install Kdyby/Translation is using  [Composer](http://getcomposer.org/):
 
-With Nette stable 2.1, this is how you install the extension
-
 ```sh
-$ composer require kdyby/translation:~1.1
+$ composer require kdyby/translation
 ```
 
 and you can enable the extension using your neon config
@@ -21,30 +19,11 @@ extensions:
 	translation: Kdyby\Translation\DI\TranslationExtension
 ```
 
-You might also wanna add the `@dev` stability flag if you like to live on the edge.
-
-
-
-And if you're using old stable Nette `2.0.*`, there is release for you but it's not developed anymore, only bugfix patches are being released.
-
-```sh
-$ composer require kdyby/translation:~0.10
-```
-
-and you have to register it in `app/bootstrap.php`
-
-
-```php
-Kdyby\Translation\DI\TranslationExtension::register($configurator);
-
-return $configurator->createContainer();
-```
-
 
 ## Setup
 
-We have to somehow tell the translator, what is the language, that the user want's to see the website in.
-You should define persistent parameter `$locale` in your presenter. That way you can keep in url the language, or read it from the url.
+We have to tell the translator in what language user wants to see the website.
+You should define persistent parameter `$locale` in your presenter. That way you can keep the language in the url.
 Also, you probably want to inject the translator to the presenter, so let's write that code too.
 
 ```php
@@ -53,15 +32,10 @@ abstract class BasePresenter extends Nette\Application\UI\Presenter
 	/** @persistent */
 	public $locale;
 
-	/** @var \Kdyby\Translation\Translator */
-	protected $translator;
+	/** @var \Kdyby\Translation\Translator @inject */
+	public $translator;
 
-	public function injectTranslator(\Kdyby\Translation\Translator $translator)
-	{
-		$this->translator = $translator;
-	}
-
-	// ...
+	// rest of your BasePresenter
 }
 ```
 
@@ -71,20 +45,16 @@ Example router might look like this
 $router[] = new Route('[<locale=cs cs|en>/]<presenter>/<action>', "Homepage:default");
 ```
 
-There is also an interface `IUserLocaleResolver` and few default implementations, they try to figure out, what language does the visitor wanna use the website in.
-The first one looks in request parameters and searches for `locale`, that's why there is the persistent parameter and example route.
-If it fails, it tries to look at `Accept-Language` header, and if that fails, it fallbacks to default locale.
+There is also an interface `IUserLocaleResolver` and few default implementations. These implementations try to figure out, in what language should the website be displayed.
+The first one looks in request parameters and searches for `locale`, that's why there is the persistent parameter and example route. If it fails, it tries to look at `Accept-Language` header, and if that fails, it fallbacks to default locale.
 
 To change the default language, place this in your `app/config/config.neon`
 
 ```yml
 translation:
 	default: cs
-	whitelist: [cs, en, de] #....
 	fallback: [cs_CZ, cs]
 ```
-
-Whitelist has default value `[cs, en]`, it's used in compile-time and prevents loading of resources that will not be used.
 
 
 ## Usage
@@ -92,7 +62,7 @@ Whitelist has default value `[cs, en]`, it's used in compile-time and prevents l
 The default directory for translation files is `%appDir%/lang` and they have to be named in specific way.
 The mask is `<category>.<language>.<type>`, this means for example `app/lang/messages.en_US.neon`.
 
-This example file `messages.en_US.neon` would look like
+This example file `messages.en_US.neon` would look like this
 
 ```yml
 homepage:
@@ -135,7 +105,7 @@ But you cannot just paste the variable inside the message, how would you transla
 Instead of writing a translation for every possible iteration of the `$name` variable, you can replace the variable with a "placeholder".
 
 ```php
-$this->translator->translate("Hello %name%", NULL, array('name' => $name));
+$this->translator->translate("Hello %name%", ['name' => $name]);
 ```
 
 And we should probably move it to catalogue file right away
@@ -146,7 +116,7 @@ homepage:
 ```
 
 ```php
-$this->translator->translate('messages.homepage.helloName', NULL, array('name' => $name));
+$this->translator->translate('messages.homepage.helloName', ['name' => $name]);
 ```
 
 The translator will look for the given message, and replace the parameters after it finds the translation.
@@ -173,29 +143,7 @@ For the exact format and all it's possibilities please check [the current Symfon
 ## Templates
 
 You don't have to call this verbose method in templates, there is a macro prepared for you!
-If you're not hacking the `Latte\Engine` creation in any way, it will work right away, because the extension will register it.
-
-If not, you have to register it manually
-
-```php
-Kdyby\Translation\Latte\TranslateMacros::install($engine->compiler);
-```
-
-This macro needs one more thing - there must be registered class `Kdyby\Translation\TemplateHelpers` as a helper loader for your templates.
-
-It's simple, all you have to do is add this to your `BasePresenter` and to your `BaseControl`, if you have any.
-
-```php
-protected function createTemplate($class = NULL)
-{
-	$template = parent::createTemplate($class);
-	$template->registerHelperLoader(callback($this->translator->createTemplateHelpers(), 'loader'));
-
-	return $template;
-}
-```
-
-And that's all, you're ready to translate templates.
+If you're not hacking the `Latte\Engine` creation, it will work right away, because the extension will register it.
 
 ```smarty
 <p>{_messages.homepage.hello}</p>
@@ -217,11 +165,29 @@ translation:
 	debugger: off
 ```
 
+### Whitelisting of resources
+
+You might happen to have a multilingual system, that has many available translations, but you only need, let's say, 3.
+Nice example is `symfony/validator`, it's translated to lots of languages but you don't want to process all of them.
+
+Whitelist is used in compile-time and prevents loading of resources that will not be used.
+
+It's disabled by default, but you can enable it by passing an array of regular expressions, where the simplest might be simple `cs` or `en`.
+
+```yml
+translation:
+	whitelist: [cs, en, de]
+```
+
+This allows you to include components like `symfony/validator` and still have relevant output of `Translator::getAvailableLocales()`.
+If you wouldn't enable the whitelisting, instead of only locales you want to use in your current app, you would see all the locales of all the resources that are added by each component.
+
+
 ### Locale resolvers
 
 There are several resolvers that take care of figuring out what locale should be used in translator as default.
 
-Special case of resolvers is DefaultLocaleResolver that is configured by `translation: default:`
+Default locale can be configured by `translation: default:`
 
 #### Session
 

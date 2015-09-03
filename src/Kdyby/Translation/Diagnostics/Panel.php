@@ -25,17 +25,6 @@ use Tracy\IBarPanel;
 
 
 
-if (!class_exists('Tracy\Debugger')) {
-	class_alias('Nette\Diagnostics\Debugger', 'Tracy\Debugger');
-}
-
-if (!class_exists('Tracy\Bar')) {
-	class_alias('Nette\Diagnostics\Bar', 'Tracy\Bar');
-	class_alias('Nette\Diagnostics\BlueScreen', 'Tracy\BlueScreen');
-	class_alias('Nette\Diagnostics\Helpers', 'Tracy\Helpers');
-	class_alias('Nette\Diagnostics\IBarPanel', 'Tracy\IBarPanel');
-}
-
 /**
  * @author Filip Procházka <filip@prochazka.su>
  */
@@ -65,7 +54,7 @@ class Panel extends Nette\Object implements IBarPanel
 	/**
 	 * @var array
 	 */
-	private $resourceWhitelist = array();
+	private $localeWhitelist = array();
 
 	/**
 	 * @var array|Kdyby\Translation\IUserLocaleResolver[]
@@ -162,7 +151,7 @@ class Panel extends Nette\Object implements IBarPanel
 			}
 
 			$panel[] = '<h2>Ignored resources</h2>';
-			$panel[] = '<p>Whitelist config: ' . implode(', ', array_map($h, $this->resourceWhitelist)) . '</p>';
+			$panel[] = '<p>Whitelist config: ' . implode(', ', array_map($h, $this->localeWhitelist)) . '</p>';
 			$panel[] = $this->renderResources($this->ignoredResources);
 		}
 
@@ -243,7 +232,10 @@ class Panel extends Nette\Object implements IBarPanel
 
 
 
-	public function choiceError(\Exception $e)
+	/**
+	 * @param \Exception|\Throwable $e
+	 */
+	public function choiceError($e)
 	{
 		$this->untranslated[] = $e;
 	}
@@ -257,9 +249,9 @@ class Panel extends Nette\Object implements IBarPanel
 
 
 
-	public function setResourceWhitelist($whitelist)
+	public function setLocaleWhitelist($whitelist)
 	{
-		$this->resourceWhitelist = $whitelist;
+		$this->localeWhitelist = $whitelist;
 	}
 
 
@@ -283,7 +275,11 @@ class Panel extends Nette\Object implements IBarPanel
 
 	public function onRequest(Application $app, Request $request)
 	{
-		$snapshot = array('request' => $request, 'locale' => $this->translator->getLocale());
+		if (!$this->translator) {
+			return;
+		}
+
+		$snapshot = array('request' => $request, 'locale' => $this->translator->getLocale(), 'resolvers' => array());
 		foreach ($this->localeResolvers as $name => $resolver) {
 			$snapshot['resolvers'][$name] = $resolver->resolve($this->translator);
 		}
@@ -312,7 +308,7 @@ class Panel extends Nette\Object implements IBarPanel
 
 
 
-	public static function renderException(\Exception $e = NULL)
+	public static function renderException($e = NULL)
 	{
 		if (!$e instanceof InvalidResourceException || !($previous = $e->getPrevious())) {
 			return NULL;

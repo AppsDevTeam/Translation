@@ -43,17 +43,66 @@ Ahoj %name%
 Ahoj Peter
 Ahoj Peter
 
-missingKey.namedHello
-missingKey.namedHello
-missingKey.namedHello
+front.missingKey.namedHello
+front.missingKey.namedHello
+front.missingKey.namedHello
 
 Helloes %name%
 Helloes Peter
 Hello Peter|Helloes Peter
 
-missingKey.namedHelloCounting
-missingKey.namedHelloCounting
-missingKey.namedHelloCounting' . "\n", (string) $template->setFile(__DIR__ . '/files/Homepage.default.latte'));
+front.missingKey.namedHelloCounting
+front.missingKey.namedHelloCounting
+front.missingKey.namedHelloCounting' . "\n", (string) $template->setFile(__DIR__ . '/files/Homepage.default.latte'));
+	}
+
+
+
+	public function testRender_translate_noescape()
+	{
+		$template = $this->buildTemplate();
+
+		Assert::same('Ahoj &lt;b&gt;%name%&lt;/b&gt;
+Ahoj &lt;b&gt;Peter&lt;/b&gt;
+Ahoj &lt;b&gt;Peter&lt;/b&gt;
+
+Ahoj &lt;b&gt;%name%&lt;/b&gt;
+Ahoj &lt;b&gt;Peter&lt;/b&gt;
+Ahoj &lt;b&gt;Peter&lt;/b&gt;
+
+front.missingKey.namedHello
+front.missingKey.namedHello
+front.missingKey.namedHello
+
+Helloes &lt;i&gt;%name%&lt;/i&gt;
+Helloes &lt;i&gt;Peter&lt;/i&gt;
+Hello &lt;i&gt;Peter&lt;/i&gt;|Helloes &lt;i&gt;Peter&lt;/i&gt;
+
+front.missingKey.namedHelloCounting
+front.missingKey.namedHelloCounting
+front.missingKey.namedHelloCounting
+
+<hr>
+
+Ahoj <b>%name%</b>
+Ahoj <b>Peter</b>
+Ahoj <b>Peter</b>
+
+Ahoj <b>%name%</b>
+Ahoj <b>Peter</b>
+Ahoj <b>Peter</b>
+
+front.missingKey.namedHello
+front.missingKey.namedHello
+front.missingKey.namedHello
+
+Helloes <i>%name%</i>
+Helloes <i>Peter</i>
+Hello <i>Peter</i>|Helloes <i>Peter</i>
+
+front.missingKey.namedHelloCounting
+front.missingKey.namedHelloCounting
+front.missingKey.namedHelloCounting' . "\n", (string) $template->setFile(__DIR__ . '/files/Article.noescape.latte'));
 	}
 
 
@@ -73,9 +122,9 @@ Ahoj Peter
 
 
 
-missingKey.namedHello
-missingKey.namedHello
-missingKey.namedHello
+front.missingKey.namedHello
+front.missingKey.namedHello
+front.missingKey.namedHello
 
 
 
@@ -85,9 +134,9 @@ Hello Peter|Helloes Peter
 
 
 
-missingKey.namedHelloCounting
-missingKey.namedHelloCounting
-missingKey.namedHelloCounting' . "\n", (string) $template->setFile(__DIR__ . '/files/Order.default.latte'));
+front.missingKey.namedHelloCounting
+front.missingKey.namedHelloCounting
+front.missingKey.namedHelloCounting' . "\n", (string) $template->setFile(__DIR__ . '/files/Order.default.latte'));
 	}
 
 
@@ -104,7 +153,7 @@ missingKey.namedHelloCounting' . "\n", (string) $template->setFile(__DIR__ . '/f
 		$translator->setFallbackLocales(array('cs_CZ', 'cs'));
 		$translator->setLocale('cs');
 
-		return $container->getByType('Nette\Bridges\ApplicationLatte\TemplateFactory')->createTemplate(new ControlMock());
+		return $container->getByType('Nette\Application\UI\ITemplateFactory')->createTemplate(new ControlMock());
 	}
 
 }

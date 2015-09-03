@@ -14,14 +14,11 @@ use Kdyby;
 use Kdyby\Translation\Diagnostics\Panel;
 use Nette;
 use Nette\Utils\ObjectMixin;
+use Symfony\Component\Translation\Loader\LoaderInterface;
 use Symfony\Component\Translation\MessageSelector;
 use Symfony\Component\Translation\Translator as BaseTranslator;
 
 
-
-if (!class_exists('Nette\Utils\ObjectMixin')) {
-	class_alias('Nette\ObjectMixin', 'Nette\Utils\ObjectMixin');
-}
 
 /**
  * Translator.
@@ -48,9 +45,9 @@ class Translator extends BaseTranslator implements ITranslator
 	private $fallbackResolver;
 
 	/**
-	 * @var CatalogueFactory
+	 * @var IResourceLoader
 	 */
-	private $catalogueFactory;
+	private $translationsLoader;
 
 	/**
 	 * @var Panel
@@ -62,22 +59,32 @@ class Translator extends BaseTranslator implements ITranslator
 	 */
 	private $availableResourceLocales = array();
 
+	/**
+	 * @var string
+	 */
+	private $defaultLocale;
+
+	/**
+	 * @var string
+	 */
+	private $localeWhitelist;
+
 
 
 	/**
 	 * @param IUserLocaleResolver $localeResolver
 	 * @param MessageSelector $selector The message selector for pluralization
 	 * @param CatalogueCompiler $catalogueCompiler
-	 * @param CatalogueFactory $catalogueFactory
 	 * @param FallbackResolver $fallbackResolver
+	 * @param IResourceLoader $loader
 	 */
-	public function __construct(IUserLocaleResolver $localeResolver, MessageSelector $selector, CatalogueCompiler $catalogueCompiler,
-		CatalogueFactory $catalogueFactory, FallbackResolver $fallbackResolver)
+	public function __construct(IUserLocaleResolver $localeResolver, MessageSelector $selector,
+		CatalogueCompiler $catalogueCompiler, FallbackResolver $fallbackResolver, IResourceLoader $loader)
 	{
 		$this->localeResolver = $localeResolver;
 		$this->catalogueCompiler = $catalogueCompiler;
-		$this->catalogueFactory = $catalogueFactory;
 		$this->fallbackResolver = $fallbackResolver;
+		$this->translationsLoader = $loader;
 
 		parent::__construct(NULL, $selector);
 	}
@@ -106,10 +113,17 @@ class Translator extends BaseTranslator implements ITranslator
 	 *
 	 * @return string
 	 */
-	public function translate($message, $count = NULL, array $parameters = array(), $domain = NULL, $locale = NULL)
+	public function translate($message, $count = NULL, $parameters = array(), $domain = NULL, $locale = NULL)
 	{
 		if ($message instanceof Phrase) {
 			return $message->translate($this);
+		}
+
+		if (is_array($count)) {
+			$locale = $domain ?: NULL;
+			$domain = $parameters ?: NULL;
+			$parameters = $count;
+			$count = NULL;
 		}
 
 		if (empty($message)) {
@@ -141,7 +155,7 @@ class Translator extends BaseTranslator implements ITranslator
 		$parameters = $tmp;
 
 		if ($count !== NULL && is_scalar($count)) {
-			return $this->transChoice($message, preg_replace('~[^0-9,.]~', '', $count), $parameters + array('%count%' => $count), $domain, $locale);
+			return $this->transChoice($message, $count, $parameters + array('%count%' => $count), $domain, $locale);
 		}
 
 		return $this->trans($message, $parameters, $domain, $locale);
@@ -152,15 +166,25 @@ class Translator extends BaseTranslator implements ITranslator
 	/**
 	 * {@inheritdoc}
 	 */
-	public function trans($id, array $parameters = array(), $domain = NULL, $locale = NULL)
+	public function trans($message, array $parameters = array(), $domain = NULL, $locale = NULL)
 	{
-		if ($id instanceof Phrase) {
-			return $id->translate($this);
+		if ($message instanceof Phrase) {
+			return $message->translate($this);
+		}
+
+		if ($domain === NULL) {
+			list($domain, $id) = $this->extractMessageDomain($message);
+
+		} else {
+			$id = $message;
 		}
 
 		$result = parent::trans($id, $parameters, $domain, $locale);
-		if ($this->panel !== NULL && $id === $result) { // probably untranslated
-			$this->panel->markUntranslated($id);
+		if ($result === "\x01") {
+			if ($this->panel !== NULL) {
+				$this->panel->markUntranslated($message);
+			}
+			$result = strtr($message, $parameters);
 		}
 		
 		if (empty($result)) {
@@ -179,10 +203,17 @@ class Translator extends BaseTranslator implements ITranslator
 	/**
 	 * {@inheritdoc}
 	 */
-	public function transChoice($id, $number, array $parameters = array(), $domain = NULL, $locale = NULL)
+	public function transChoice($message, $number, array $parameters = array(), $domain = NULL, $locale = NULL)
 	{
-		if ($id instanceof Phrase) {
-			return $id->translate($this);
+		if ($message instanceof Phrase) {
+			return $message->translate($this);
+		}
+
+		if ($domain === NULL) {
+			list($domain, $id) = $this->extractMessageDomain($message);
+
+		} else {
+			$id = $message;
 		}
 
 		try {
@@ -195,11 +226,47 @@ class Translator extends BaseTranslator implements ITranslator
 			}
 		}
 
-		if ($this->panel !== NULL && $id === $result) { // probably untranslated
-			$this->panel->markUntranslated($id);
+		if ($result === "\x01") {
+			if ($this->panel !== NULL) {
+				$this->panel->markUntranslated($message);
+			}
+			$result = strtr($message, $parameters);
 		}
 
 		return $result;
+	}
+
+
+
+	/**
+	 * @param string $format
+	 * @param LoaderInterface $loader
+	 */
+	public function addLoader($format, LoaderInterface $loader)
+	{
+		parent::addLoader($format, $loader);
+		$this->translationsLoader->addLoader($format, $loader);
+	}
+
+
+
+	/**
+	 * @return \Symfony\Component\Translation\Loader\LoaderInterface[]
+	 */
+	protected function getLoaders()
+	{
+		return $this->translationsLoader->getLoaders();
+	}
+
+
+
+	/**
+	 * @param array $whitelist
+	 * @return Translator
+	 */
+	public function setLocaleWhitelist(array $whitelist = NULL)
+	{
+		$this->localeWhitelist = self::buildWhitelistRegexp($whitelist);
 	}
 
 
@@ -209,9 +276,20 @@ class Translator extends BaseTranslator implements ITranslator
 	 */
 	public function addResource($format, $resource, $locale, $domain = NULL)
 	{
-		$this->catalogueFactory->addResource($format, $resource, $locale, $domain);
+		if ($this->localeWhitelist && !preg_match($this->localeWhitelist, $locale)) {
+			if ($this->panel) {
+				$this->panel->addIgnoredResource($format, $resource, $locale, $domain);
+			}
+			return;
+		}
+
 		parent::addResource($format, $resource, $locale, $domain);
+		$this->catalogueCompiler->addResource($format, $resource, $locale, $domain);
 		$this->availableResourceLocales[$locale] = TRUE;
+
+		if ($this->panel) {
+			$this->panel->addResource($format, $resource, $locale, $domain);
+		}
 	}
 
 
@@ -234,7 +312,9 @@ class Translator extends BaseTranslator implements ITranslator
 	 */
 	public function getAvailableLocales()
 	{
-		return array_keys($this->availableResourceLocales);
+		$locales = array_keys($this->availableResourceLocales);
+		sort($locales);
+		return $locales;
 	}
 
 
@@ -245,10 +325,33 @@ class Translator extends BaseTranslator implements ITranslator
 	public function getLocale()
 	{
 		if ($this->locale === NULL) {
-			$this->locale = $this->localeResolver->resolve($this);
+			$this->setLocale($this->localeResolver->resolve($this));
 		}
 
 		return $this->locale;
+	}
+
+
+
+	/**
+	 * @return string
+	 */
+	public function getDefaultLocale()
+	{
+		return $this->defaultLocale;
+	}
+
+
+
+	/**
+	 * @param string $locale
+	 * @return Translator
+	 */
+	public function setDefaultLocale($locale)
+	{
+		$this->assertValidLocale($locale);
+		$this->defaultLocale = $locale;
+		return $this;
 	}
 
 
@@ -298,6 +401,50 @@ class Translator extends BaseTranslator implements ITranslator
 	protected function computeFallbackLocales($locale)
 	{
 		return $this->fallbackResolver->compute($this, $locale);
+	}
+
+
+
+	/**
+	 * Asserts that the locale is valid, throws an Exception if not.
+	 *
+	 * @param string $locale Locale to tests
+	 * @throws \InvalidArgumentException If the locale contains invalid characters
+	 */
+	protected function assertValidLocale($locale)
+	{
+		if (preg_match('~^[a-z0-9@_\\.\\-]*\z~i', $locale) !== 1) {
+			throw new \InvalidArgumentException(sprintf('Invalid "%s" locale.', $locale));
+		}
+	}
+
+
+
+	/**
+	 * @param $message
+	 * @return array
+	 */
+	private function extractMessageDomain($message)
+	{
+		if (strpos($message, '.') !== FALSE && strpos($message, ' ') === FALSE) {
+			list($domain, $message) = explode('.', $message, 2);
+
+		} else {
+			$domain = 'messages';
+		}
+
+		return array($domain, $message);
+	}
+
+
+
+	/**
+	 * @param null|string $whitelist
+	 * @return null|string
+	 */
+	public static function buildWhitelistRegexp($whitelist)
+	{
+		return $whitelist ? '~^(' . implode('|', $whitelist) . ')~i' : NULL;
 	}
 
 

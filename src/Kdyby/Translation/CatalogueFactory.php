@@ -13,7 +13,6 @@ namespace Kdyby\Translation;
 use Kdyby;
 use Nette;
 use Symfony\Component\Translation\Exception\NotFoundResourceException;
-use Symfony\Component\Translation\MessageCatalogue;
 use Symfony\Component\Translation\MessageCatalogueInterface;
 
 
@@ -30,7 +29,7 @@ class CatalogueFactory extends Nette\Object
 	private $fallbackResolver;
 
 	/**
-	 * @var TranslationLoader
+	 * @var IResourceLoader
 	 */
 	private $loader;
 
@@ -41,7 +40,7 @@ class CatalogueFactory extends Nette\Object
 
 
 
-	public function __construct(FallbackResolver $fallbackResolver, TranslationLoader $loader)
+	public function __construct(FallbackResolver $fallbackResolver, IResourceLoader $loader)
 	{
 		$this->fallbackResolver = $fallbackResolver;
 		$this->loader = $loader;
@@ -55,6 +54,23 @@ class CatalogueFactory extends Nette\Object
 	public function addResource($format, $resource, $locale, $domain = 'messages')
 	{
 		$this->resources[$locale][] = array($format, $resource, $domain);
+	}
+
+
+
+	/**
+	 * @return array
+	 */
+	public function getResources()
+	{
+		$list = array();
+		foreach ($this->resources as $locale => $resources) {
+			foreach ($resources as $meta) {
+				$list[] = $meta[1]; // resource file
+			}
+		}
+
+		return $list;
 	}
 
 
@@ -79,13 +95,20 @@ class CatalogueFactory extends Nette\Object
 
 		$current = $availableCatalogues[$locale];
 
+		$chain = array($locale => TRUE);
 		foreach ($this->fallbackResolver->compute($translator, $locale) as $fallback) {
 			if (!isset($availableCatalogues[$fallback])) {
 				$this->doLoadCatalogue($availableCatalogues, $fallback);
 			}
 
-			$current->addFallbackCatalogue($availableCatalogues[$fallback]);
-			$current = $availableCatalogues[$fallback];
+			$newFallback = $availableCatalogues[$fallback];
+			if (($newFallbackFallback = $newFallback->getFallbackCatalogue()) && isset($chain[$newFallbackFallback->getLocale()])) {
+				break;
+			}
+
+			$current->addFallbackCatalogue($newFallback);
+			$current = $newFallback;
+			$chain[$fallback] = TRUE;
 		}
 
 		return $availableCatalogues[$locale];

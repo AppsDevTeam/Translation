@@ -17,6 +17,7 @@ use Nette\DI\Statement;
 use Nette\PhpGenerator as Code;
 use Nette\Reflection;
 use Nette\Utils\Arrays;
+use Nette\Utils\Callback;
 use Nette\Utils\Finder;
 use Nette\Utils\Strings;
 use Nette\Utils\Validators;
@@ -43,7 +44,7 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 	 * @var array
 	 */
 	public $defaults = array(
-		// 'whitelist' => array('cs', 'en'),
+		'whitelist' => NULL, // array('cs', 'en'),
 		'default' => 'en',
 		// 'fallback' => array('en_US', 'en'), // using custom merge strategy becase Nette's config merger appends lists of values
 		'dirs' => array('%appDir%/lang', '%appDir%/locale'),
@@ -80,6 +81,8 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 		$translator = $builder->addDefinition($this->prefix('default'))
 			->setClass('Kdyby\Translation\Translator', array($this->prefix('@userLocaleResolver')))
 			->addSetup('?->setTranslator(?)', array($this->prefix('@userLocaleResolver.param'), '@self'))
+			->addSetup('setDefaultLocale', array($config['default']))
+			->addSetup('setLocaleWhitelist', array($config['whitelist']))
 			->setInject(FALSE);
 
 		Validators::assertField($config, 'fallback', 'list');
@@ -92,7 +95,7 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 		if ($config['debugger'] && interface_exists('Tracy\IBarPanel')) {
 			$builder->addDefinition($this->prefix('panel'))
 				->setClass('Kdyby\Translation\Diagnostics\Panel', array(dirname($builder->expand('%appDir%'))))
-				->addSetup('setResourceWhitelist', array($config['whitelist']));
+				->addSetup('setLocaleWhitelist', array($config['whitelist']));
 
 			$translator->addSetup('?->register(?)', array($this->prefix('@panel'), '@self'));
 			$catalogueCompiler->addSetup('enableDebugMode');
@@ -117,10 +120,6 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 			->setClass('Symfony\Component\Translation\MessageSelector')
 			->setInject(FALSE);
 
-		$builder->addDefinition($this->prefix('loadersInitializer'))
-			->setClass('Kdyby\Translation\LoadersInitializer')
-			->setInject(FALSE);
-
 		$builder->addDefinition($this->prefix('extractor'))
 			->setClass('Symfony\Component\Translation\Extractor\ChainExtractor')
 			->setInject(FALSE);
@@ -142,15 +141,6 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 		if ($this->isRegisteredConsoleExtension()) {
 			$this->loadConsole($config);
 		}
-
-		$latteFactory = $builder->hasDefinition('nette.latteFactory')
-			? $builder->getDefinition('nette.latteFactory')
-			: $builder->getDefinition('nette.latte');
-
-		$latteFactory
-			->addSetup('Kdyby\Translation\Latte\TranslateMacros::install(?->getCompiler())', array('@self'))
-			->addSetup('addFilter', array('translate', array($this->prefix('@helpers'), 'translate')))
-			->addSetup('addFilter', array('getTranslator', array($this->prefix('@helpers'), 'getTranslator')));
 	}
 
 
@@ -164,9 +154,6 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 			->setAutowired(FALSE)
 			->setInject(FALSE);
 
-		$builder->getDefinition('application')
-			->addSetup('$service->onRequest[] = ?', array(array($this->prefix('@userLocaleResolver.param'), 'onRequest')));
-
 		$builder->addDefinition($this->prefix('userLocaleResolver.acceptHeader'))
 			->setClass('Kdyby\Translation\LocaleResolver\AcceptHeaderResolver')
 			->setInject(FALSE);
@@ -178,13 +165,9 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 		$chain = $builder->addDefinition($this->prefix('userLocaleResolver'))
 			->setClass('Kdyby\Translation\IUserLocaleResolver')
 			->setFactory('Kdyby\Translation\LocaleResolver\ChainResolver')
-			->addSetup('addResolver', array(new Statement('Kdyby\Translation\LocaleResolver\DefaultLocale', array($config['default']))))
 			->setInject(FALSE);
 
-		$resolvers = array(
-			new Statement('Kdyby\Translation\LocaleResolver\DefaultLocale', array($config['default']))
-		);
-
+		$resolvers = array();
 		if ($config['resolvers'][self::RESOLVER_HEADER]) {
 			$resolvers[] = $this->prefix('@userLocaleResolver.acceptHeader');
 			$chain->addSetup('addResolver', array($this->prefix('@userLocaleResolver.acceptHeader')));
@@ -203,10 +186,6 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 		if ($config['debugger'] && interface_exists('Tracy\IBarPanel')) {
 			$builder->getDefinition($this->prefix('panel'))
 				->addSetup('setLocaleResolvers', array(array_reverse($resolvers)));
-
-			$builder->getDefinition('application')
-				->addSetup('$self = $this; $service->onStartup[] = function () use ($self) { $self->getService(?); }', array($this->prefix('default')))
-				->addSetup('$service->onRequest[] = ?', array(array($this->prefix('@panel'), 'onRequest')));
 		}
 	}
 
@@ -270,6 +249,33 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 		$builder = $this->getContainerBuilder();
 		$config = $this->getConfig();
 
+		$self = $this;
+		$registerToLatte = function (Nette\DI\ServiceDefinition $def) use ($self) {
+			$def
+				->addSetup('?->onCompile[] = function($engine) { Kdyby\Translation\Latte\TranslateMacros::install($engine->getCompiler()); }', array('@self'))
+				->addSetup('addFilter', array('translate', array($self->prefix('@helpers'), 'translate')))
+				->addSetup('addFilter', array('getTranslator', array($self->prefix('@helpers'), 'getTranslator')));
+		};
+
+		$latteFactoryService = $builder->getByType('Nette\Bridges\ApplicationLatte\ILatteFactory') ?: 'nette.latteFactory';
+		if ($builder->hasDefinition($latteFactoryService)) {
+			$registerToLatte($builder->getDefinition($latteFactoryService));
+		}
+
+		if ($builder->hasDefinition('nette.latte')) {
+			$registerToLatte($builder->getDefinition('nette.latte'));
+		}
+
+		$applicationService = $builder->getByType('Nette\Application\Application') ?: 'application';
+		$builder->getDefinition($applicationService)
+			->addSetup('$service->onRequest[] = ?', array(array($this->prefix('@userLocaleResolver.param'), 'onRequest')));
+
+		if ($config['debugger'] && interface_exists('Tracy\IBarPanel')) {
+			$builder->getDefinition($applicationService)
+				->addSetup('$self = $this; $service->onStartup[] = function () use ($self) { $self->getService(?); }', array($this->prefix('default')))
+				->addSetup('$service->onRequest[] = ?', array(array($this->prefix('@panel'), 'onRequest')));
+		}
+
 		Kdyby\Translation\Diagnostics\Panel::registerBluescreen();
 
 		$extractor = $builder->getDefinition($this->prefix('extractor'));
@@ -291,18 +297,14 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 		}
 
 		$this->loaders = array();
-		$loader = $builder->getDefinition($this->prefix('loader'));
 		foreach ($builder->findByTag(self::LOADER_TAG) as $loaderId => $meta) {
 			Validators::assert($meta, 'string:2..');
-
-			$this->loaders[$loaderId][] = $meta;
-			$loader->addSetup('addLoader', array($meta, '@' . $loaderId));
-
 			$builder->getDefinition($loaderId)->setAutowired(FALSE)->setInject(FALSE);
+			$this->loaders[$meta] = $loaderId;
 		}
 
-		$builder->getDefinition($this->prefix('loadersInitializer'))
-			->setArguments(array($this->loaders))
+		$builder->getDefinition($this->prefix('loader'))
+			->addSetup('injectServiceIds', array($this->loaders))
 			->setInject(FALSE);
 
 		foreach ($this->compiler->getExtensions() as $extension) {
@@ -318,30 +320,34 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 				$builder->addDependency($dir);
 			}
 
-			$translator = $builder->getDefinition($this->prefix('default'));
+			$this->loadResourcesFromDirs($dirs);
+		}
+	}
 
-			foreach (Arrays::flatten($this->loaders) as $format) {
-				foreach (Finder::findFiles('*.*.' . $format)->from($dirs) as $file) {
-					/** @var \SplFileInfo $file */
-					if ($m = Strings::match($file->getFilename(), '~^(?P<domain>.*?)\.(?P<locale>[^\.]+)\.' . preg_quote($format) . '$~')) {
-						if (!in_array(substr($m['locale'], 0, 2), $config['whitelist'])) {
-							if ($config['debugger']) {
-								$builder->getDefinition($this->prefix('panel'))
-									->addSetup('addIgnoredResource', array($format, $file->getPathname(), $m['locale'], $m['domain']));
-							}
-							continue; // ignore
-						}
 
-						$this->validateResource($format, $file->getPathname(), $m['locale'], $m['domain']);
-						$translator->addSetup('addResource', array($format, $file->getPathname(), $m['locale'], $m['domain']));
-						$builder->addDependency($file->getPathname());
 
-						if ($config['debugger']) {
-							$builder->getDefinition($this->prefix('panel'))
-								->addSetup('addResource', array($format, $file->getPathname(), $m['locale'], $m['domain']));
-						}
-					}
+	protected function loadResourcesFromDirs($dirs)
+	{
+		$builder = $this->getContainerBuilder();
+		$config = $this->getConfig();
+
+		$whitelistRegexp = Kdyby\Translation\Translator::buildWhitelistRegexp($config['whitelist']);
+		$translator = $builder->getDefinition($this->prefix('default'));
+
+		foreach (array_keys($this->loaders) as $format) {
+			foreach (Finder::findFiles('*.*.' . $format)->from($dirs) as $file) {
+				/** @var \SplFileInfo $file */
+				if (!$m = Strings::match($file->getFilename(), '~^(?P<domain>.*?)\.(?P<locale>[^\.]+)\.' . preg_quote($format) . '$~')) {
+					continue;
 				}
+
+				if ($whitelistRegexp && !preg_match($whitelistRegexp, $m['locale']) && $builder->parameters['productionMode']) {
+					continue; // ignore in production mode, there is no need to pass the ignored resources
+				}
+
+				$this->validateResource($format, $file->getPathname(), $m['locale'], $m['domain']);
+				$translator->addSetup('addResource', array($format, $file->getPathname(), $m['locale'], $m['domain']));
+				$builder->addDependency($file->getPathname());
 			}
 		}
 	}
@@ -352,35 +358,31 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 	{
 		$builder = $this->getContainerBuilder();
 
-		foreach ($this->loaders as $id => $knownFormats) {
-			if (!in_array($format, $knownFormats, TRUE)) {
-				continue;
+		if (!isset($this->loaders[$format])) {
+			return;
+		}
+
+		try {
+			$def = $builder->getDefinition($this->loaders[$format]);
+			$refl = Reflection\ClassType::from($def->factory ? $def->factory->entity : $def->class);
+			if (($method = $refl->getConstructor()) && $method->getNumberOfRequiredParameters() > 1) {
+				return;
 			}
 
-			try {
-				$def = $builder->getDefinition($id);
-				$refl = Reflection\ClassType::from($def->factory ? $def->factory->entity : $def->class);
-				if (($method = $refl->getConstructor()) && $method->getNumberOfRequiredParameters() > 1) {
-					continue;
-				}
-
-				$loader = $refl->newInstance();
-				if (!$loader instanceof LoaderInterface) {
-					continue;
-				}
-
-			} catch (\ReflectionException $e) {
-				continue;
+			$loader = $refl->newInstance();
+			if (!$loader instanceof LoaderInterface) {
+				return;
 			}
 
-			try {
-				$loader->load($file, $locale, $domain);
+		} catch (\ReflectionException $e) {
+			return;
+		}
 
-			} catch (\Exception $e) {
-				throw new InvalidResourceException("Resource $file is not valid and cannot be loaded.", 0, $e);
-			}
+		try {
+			$loader->load($file, $locale, $domain);
 
-			break;
+		} catch (\Exception $e) {
+			throw new InvalidResourceException("Resource $file is not valid and cannot be loaded.", 0, $e);
 		}
 	}
 
@@ -412,7 +414,7 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 	 */
 	public function getConfig(array $defaults = NULL, $expand = TRUE)
 	{
-		return parent::getConfig($this->defaults) + array('fallback' => array('en_US'), 'whitelist' => array('cs', 'en'));
+		return parent::getConfig($this->defaults) + array('fallback' => array('en_US'));
 	}
 
 

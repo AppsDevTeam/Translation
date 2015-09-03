@@ -36,6 +36,20 @@ class ExtensionTest extends TestCase
 
 		Assert::same("Ahoj světe", $translator->translate('homepage.hello', NULL, array(), 'front', 'cs'));
 		Assert::same("Hello world", $translator->translate('homepage.hello', NULL, array(), 'front', 'en'));
+
+		Assert::same("front.not.found", $translator->translate('front.not.found'));
+	}
+
+
+
+	public function testResolvers()
+	{
+		$sl = $this->createContainer('resolvers.default-only');
+
+		/** @var Kdyby\Translation\Translator $translator */
+		$translator = $sl->getByType('Kdyby\Translation\Translator');
+
+		Assert::same('cs', $translator->getLocale());
 	}
 
 }
