@@ -216,7 +216,7 @@ class ExtractCommand extends Command
 			$oneSkyParameters = $this->serviceLocator->parameters['oneSky'];
 			$oneSky->setApiKey($oneSkyParameters['apiKey'])->setSecret($oneSkyParameters['apiSecret']);
 
-			foreach (Finder::findFiles('*'. $lang .'.po')->in($this->outputDir) as $file) {
+			foreach (Finder::findFiles('*'. $lang .'.'. $input->getOption('output-format'))->in($this->outputDir) as $file) {
 				// všechny soubory s překlady daného jazyka
 
 				$matches = array();
@@ -245,7 +245,7 @@ class ExtractCommand extends Command
 					$output->writeln(sprintf('<info>Uploading \'%s\' catalogue to OneSkyApp</info>', $lang));
 
 					$response = $oneSky->files('upload', array(
-						'project_id' => 33906,
+						'project_id' => $oneSkyParameters['projectId'],
 						'file' => $uploadFilePathName,
 						'file_format' => 'GNU_PO',
 						'locale' => $locale,
@@ -258,7 +258,7 @@ class ExtractCommand extends Command
 					$output->writeln(sprintf('<info>Downloading \'%s\' catalogue from OneSkyApp</info>', $lang));
 
 					$response = $oneSky->translations('export', array(
-						'project_id' => 33906,
+						'project_id' => $oneSkyParameters['projectId'],
 						'locale' => $locale,
 						'source_file_name' => $filename .'.'. $extension,
 						'export_file_name' => $file->getFilename(),

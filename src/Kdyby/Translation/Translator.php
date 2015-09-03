@@ -136,18 +136,6 @@ class Translator extends BaseTranslator implements ITranslator
 			return $message; // todo: what now?
 		}
 
-		if ($domain === NULL) {
-			/*
-			if (strpos($message, '.') !== FALSE && strpos($message, ' ') === FALSE) {
-				list($domain, $message) = explode('.', $message, 2);
-
-			} else {
-				$domain = 'messages';
-			}
-			*/
-			$domain = 'messages';
-		}
-
 		$tmp = array();
 		foreach ($parameters as $key => $val) {
 			$tmp['%' . trim($key, '%') . '%'] = $val;
@@ -186,7 +174,7 @@ class Translator extends BaseTranslator implements ITranslator
 			}
 			$result = strtr($message, $parameters);
 		}
-		
+
 		if (empty($result)) {
 			return $id;
 			/*
@@ -194,7 +182,7 @@ class Translator extends BaseTranslator implements ITranslator
 			return end($pieces);
 			*/
 		}
-		
+
 		return $result;
 	}
 
