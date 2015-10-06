@@ -216,29 +216,18 @@ class ExtractCommand extends Command
 			$oneSkyParameters = $this->serviceLocator->parameters['oneSky'];
 			$oneSky->setApiKey($oneSkyParameters['apiKey'])->setSecret($oneSkyParameters['apiSecret']);
 
-			foreach (Finder::findFiles('*'. $lang .'.'. $input->getOption('output-format'))->in($this->outputDir) as $file) {
+			$fileList = $oneSky->files('list', [
+				'project_id' => $oneSkyParameters['projectId'],
+			]);
+			$fileList = json_decode($fileList, TRUE);
+
+			foreach ($fileList['data'] as $file) {
+				$file = new \SplFileInfo($this->outputDir .'/'. $file['file_name']);
+				$locale = $input->getOption('catalogue-language');
+
 				// všechny soubory s překlady daného jazyka
 
-				$matches = array();
-				preg_match('/^(.+)\.(.+)\.(.+)$/', $file->getFilename(), $matches);
-				$filename = $matches[1];
-				$locale = $matches[2];
-				$extension = $matches[3];
-
-				/*
-				$response = $oneSky->files('list', array(
-					'project_id' => 33906,
-				));
-				print_r(json_decode($response, true));
-				die();
-				*/
-
-				if ($locale === self::ONESKY_DEFAULT_LANG) {
-					$uploadFilePathName = $file->getPath() .'/'. $filename .'.'. $extension;
-					copy($file->getRealPath(), $uploadFilePathName);
-				} else {
-					$uploadFilePathName = $file->getRealPath();
-				}
+				$uploadFilePathName = $file->getRealPath();
 
 				// upload existujících překladů na server
 				if ($input->getOption('onesky-upload')) {
@@ -260,14 +249,14 @@ class ExtractCommand extends Command
 					$response = $oneSky->translations('export', array(
 						'project_id' => $oneSkyParameters['projectId'],
 						'locale' => $locale,
-						'source_file_name' => $filename .'.'. $extension,
+						'source_file_name' => $file->getFilename(),
 						'export_file_name' => $file->getFilename(),
 					));
 					$decodedResponse = json_decode($response, true);
 					if ($decodedResponse === NULL) {
 						// v pořádku
 
-						file_put_contents($oneSkyDir .'/'. $file->getFilename(), $response);
+						file_put_contents($oneSkyDir .'/'. $file->getBasename('.'.$file->getExtension()) .'.'. $locale .'.'. $file->getExtension(), $response);
 					} else {
 						print_r($decodedResponse);
 					}
