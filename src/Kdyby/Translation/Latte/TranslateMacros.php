@@ -48,18 +48,21 @@ class TranslateMacros extends MacroSet
 	public function macroTranslate(MacroNode $node, PhpWriter $writer)
 	{
 		if ($node->closing) {
-			return $writer->write('echo %modify($template->translate(ob_get_clean()))');
-
-		} elseif ($node->isEmpty = ($node->args !== '')) {
-			if ($this->containsOnlyOneWord($node)) {
-				return $writer->write('echo %modify($template->translate(%node.word))');
-
+			if (strpos($node->content, '<?php') === FALSE) {
+				$value = var_export($node->content, TRUE);
+				$node->content = '';
 			} else {
-				return $writer->write('echo %modify($template->translate(%node.word, %node.args))');
+				$node->openingCode = '<?php ob_start(function () {}) ?>' . $node->openingCode;
+				$value = 'ob_get_clean()';
 			}
-
-		} else {
-			return 'ob_start()';
+			return $writer->write('$_fi = new LR\FilterInfo(%var); echo %modifyContent($this->filters->filterContent("translate", $_fi, %raw))', $node->context[0], $value);
+		} elseif ($node->args !== '') {
+			$node->empty = TRUE;
+			if ($this->containsOnlyOneWord($node)) {
+				return $writer->write('echo %modify(call_user_func($this->filters->translate, %node.word))');
+			} else {
+				return $writer->write('echo %modify(call_user_func($this->filters->translate, %node.word, %node.args))');
+			}
 		}
 	}
 
